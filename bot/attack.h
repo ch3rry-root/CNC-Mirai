@@ -25,6 +25,11 @@ struct attack_option {
     unsigned char *val;
     uint8_t key;
 };
+struct attack_stomp_data {
+    ipv4_t addr;
+    uint32_t seq, ack_seq;
+    port_t sport, dport;
+};
 
 typedef void (*ATTACK_FUNC) (uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 typedef uint8_t ATTACK_VECTOR;
@@ -48,6 +53,9 @@ struct Attack {
 #define ATK_VEC_SOCKET      8 
 #define ATK_VEC_STREAM      9
 #define ATK_VEC_TCPWRA      10
+#define ATK_VEC_OVH         11
+#define ATK_VEC_STOMP       12
+
 
 #define ATK_OPT_PAYLOAD_SIZE    0   // What should the size of the packet data be?
 #define ATK_OPT_PAYLOAD_RAND    1   // Should we randomize the packet data contents?
@@ -104,6 +112,8 @@ void attack_udp_stdhex(uint8_t, struct attack_target *, uint8_t, struct attack_o
 void attack_socket(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_tcpstream(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_wraflood(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
+void attack_ovh(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
+void attack_stomp(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void update_process(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 
 static void add_attack(ATTACK_VECTOR, ATTACK_FUNC);
