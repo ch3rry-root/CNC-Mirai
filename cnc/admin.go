@@ -470,6 +470,7 @@ func Admin(conn net.Conn) {
 		session.History = append(session.History, command)
 
 		// Main command handling
+
 		switch cmdName {
 
 		// Clear command
@@ -628,6 +629,17 @@ func Admin(conn net.Conn) {
 				continue
 			} else if session.User.Admin || session.User.Reseller && session.User.API {
 				args := strings.Split(command, " ")[1:]
+
+				if len(args) == 0 {
+					status := ansiWarning + "disabled" + ansiReset
+					if session.User.API {
+						status = ansiSuccess + "enabled" + ansiReset
+					}
+					session.Conn.Write([]byte(ansiSystem + "Your API status: " + status + "\r\n" + ansiReset))
+					session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": api <true/false> <username>\r\n"))
+					continue
+				}
+
 				if len(args) <= 1 {
 					session.Conn.Write([]byte(ansiWarning + "You must provide a username & bool" + ansiReset + "\r\n"))
 					continue
@@ -667,37 +679,46 @@ func Admin(conn net.Conn) {
 				continue
 			}
 
-			args := strings.Split(command, " ")[1:]
-			if len(args) <= 1 {
-				session.Conn.Write([]byte(ansiWarning + "You must provide a username & bool" + ansiReset + "\r\n"))
+			args := strings.Fields(command)[1:] // Usa Fields para mejor manejo
+
+			if len(args) == 0 {
+				// Muestra ayuda y estado del propio usuario
+				status := ansiSuccess + "true" + ansiReset
+				session.Conn.Write([]byte(ansiSystem + "Your admin status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": admin <true/false> <username>\r\n"))
+				continue
+			}
+
+			if len(args) < 2 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username and boolean (true/false)" + ansiReset + "\r\n"))
 				continue
 			}
 
 			status, err := strconv.ParseBool(args[0])
 			if err != nil {
-				session.Conn.Write([]byte(ansiWarning + "You must provide a username & bool" + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiWarning + "Invalid boolean value. Use true or false." + ansiReset + "\r\n"))
 				continue
 			}
 
-			user, err := FindUser(args[1])
+			username := args[1]
+			user, err := FindUser(username)
 			if err != nil || user == nil {
-				session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiError + "User does not exist" + ansiReset + "\r\n"))
 				continue
 			}
 
 			if user.Admin == status {
-				session.Conn.Write([]byte(ansiWarning + "Status is already what you are trying to change too" + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiWarning + "Status is already set to that value" + ansiReset + "\r\n"))
 				continue
 			}
 
 			if err := ModifyField(user, "admin", status); err != nil {
-				session.Conn.Write([]byte(ansiError + "Failed to modify users admin status" + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiError + "Failed to modify user's admin status" + ansiReset + "\r\n"))
 				continue
 			}
 
-			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users admin status to %v!%s\r\n", ansiSuccess, status, ansiReset)))
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed user's admin status to %v!%s\r\n", ansiSuccess, status, ansiReset)))
 			continue
-
 		case "reseller":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
@@ -705,6 +726,17 @@ func Admin(conn net.Conn) {
 			}
 
 			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Reseller {
+					status = ansiSuccess + "enabled" + ansiReset
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your reseller status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": reseller <true/false> <username>\r\n"))
+				continue
+			}
+
 			if len(args) <= 1 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username & bool" + ansiReset + "\r\n"))
 				continue
@@ -742,6 +774,17 @@ func Admin(conn net.Conn) {
 			}
 
 			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Maxtime > 0 {
+					status = fmt.Sprintf("%s%d seconds%s", ansiNumbers, session.User.Maxtime, ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your maxtime status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": maxtime <seconds> <username>\r\n"))
+				continue
+			}
+
 			if len(args) <= 1 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
 				continue
@@ -774,6 +817,17 @@ func Admin(conn net.Conn) {
 			}
 
 			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Cooldown > 0 {
+					status = fmt.Sprintf("%s%d seconds%s", ansiNumbers, session.User.Cooldown, ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your cooldown status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": cooldown <seconds> <username>\r\n"))
+				continue
+			}
+
 			if len(args) <= 1 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
 				continue
@@ -806,6 +860,17 @@ func Admin(conn net.Conn) {
 			}
 
 			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Conns > 0 {
+					status = fmt.Sprintf("%s%d%s", ansiNumbers, session.User.Conns, ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your conns status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": conns <number> <username>\r\n"))
+				continue
+			}
+
 			if len(args) <= 1 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
 				continue
@@ -838,6 +903,17 @@ func Admin(conn net.Conn) {
 			}
 
 			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.MaxDaily > 0 {
+					status = fmt.Sprintf("%s%d%s", ansiNumbers, session.User.MaxDaily, ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your max_daily status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": max_daily <number> <username>\r\n"))
+				continue
+			}
+
 			if len(args) <= 1 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
 				continue
@@ -870,6 +946,7 @@ func Admin(conn net.Conn) {
 			}
 
 			args := strings.Split(command, " ")[1:]
+
 			if len(args) <= 1 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
 				continue
@@ -952,6 +1029,7 @@ func Admin(conn net.Conn) {
 			}
 
 			args := strings.Split(command, " ")[1:]
+
 			if len(args) <= 0 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username" + ansiReset + "\r\n"))
 				continue
