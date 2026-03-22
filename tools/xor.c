@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <arpa/inet.h>
-static uint32_t table_key = 0x6d53d2c2;
+static uint32_t table_key = 0xdeadbeef;
 
 void *x(void *, int);
 

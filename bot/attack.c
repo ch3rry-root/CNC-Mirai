@@ -201,12 +201,11 @@ char *attack_get_opt_str(uint8_t opts_len, struct attack_option *opts, uint8_t o
 
 int attack_get_opt_int(uint8_t opts_len, struct attack_option *opts, uint8_t opt, unsigned int def)
 {
-    unsigned char *val = attack_get_opt_str(opts_len, opts, opt, NULL), *endptr;
-
+    unsigned char *val = attack_get_opt_str(opts_len, opts, opt, NULL);
     if (val == NULL)
         return def;
     else
-        return (val, 10);// this is mirai problems again uh...
+        return util_atoi(val, 10);
 }
 
 uint32_t attack_get_opt_ip(uint8_t opts_len, struct attack_option *opts, uint8_t opt, uint32_t def)

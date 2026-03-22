@@ -30,8 +30,11 @@ type Attack struct {
 }
 
 var BlacklistedIPs = []string{
-	"1.1.1.1", // ik this is shit
-
+	"1.1.1.1",
+	"104.16.149.244",
+	"8.8.8.8",
+	"189.140.120.152",
+	"192.0.66.108",
 }
 
 // Parse will parse the command into sendable bytes.
