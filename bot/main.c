@@ -95,7 +95,7 @@ int main(int argc, char **args)
     char id_buf[32];
     int pgid, pings = 0; 
     defend_binary();
-    //antidebug(); solo de pruebaa
+    antidebug();
     unlink(args[0]);
 
     #ifndef DEBUG
