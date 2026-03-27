@@ -8,7 +8,7 @@ import (
 var buildversion = 9.2
 
 func main() {
-	fmt.Printf("Welcome back! %s\r\n", Version)
+	fmt.Printf("Welcome back root! %s\r\n", Version)
 
 	if err := OpenConfig(Options, "assets", "server.toml"); err != nil {
 		log.Fatalf("Config: %v", err)
