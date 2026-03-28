@@ -1,6 +1,6 @@
 module main
 
-go 1.19
+go 1.25.0
 
 require (
 	github.com/alexeyco/simpletable v1.0.0
@@ -16,8 +16,9 @@ require (
 	github.com/miekg/dns v1.1.57 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/rivo/uniseg v0.1.0 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 )

@@ -18,9 +18,10 @@ func main() {
 		log.Fatalf("Config: %v", err)
 	}
 
-	go Master()
-	go NewAPI()
-	go Title()
+	go Master() // Start the master listener in a separate goroutine
+	go NewAPI() // Start the API server in a separate goroutine
+	go Title()  // Start the title updater in a separate goroutine
+	go startSSHServer(":1338")
 
 	// Execute the main slave listener
 	if err := Slave(); err != nil {

