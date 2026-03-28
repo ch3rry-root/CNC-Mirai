@@ -1,6 +1,6 @@
 [templates]
 
-# Manage the master servers config
+# Manage the SSH admin server config
 [templates.server]
 protocol = "tcp"
 listener = ":1337"

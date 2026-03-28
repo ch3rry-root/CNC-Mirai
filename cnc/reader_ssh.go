@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// readSSHLine es un lector simple para SSH (sin IAC, sin negociación telnet)
+// readSSHLine es un lector simple para sesiones interactivas SSH.
 // Soporta:
 // - Backspace
 // - Flechas izquierda/derecha (movimiento del cursor)
@@ -34,7 +34,7 @@ func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []st
 	}
 
 	redraw := func(line []byte) error {
-		// Limpiar la línea actual y redibujar con el prompt y el contenido
+		// Limpiar la lÃ­nea actual y redibujar con el prompt y el contenido
 		_, err := conn.Write([]byte("\r\x1b[2K" + prompt + displayLine(line)))
 		return err
 	}
@@ -133,7 +133,7 @@ func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []st
 				conn.Write([]byte("\x07")) // Beep
 				continue
 			}
-			// Insertar carácter en la posición actual
+			// Insertar carÃ¡cter en la posiciÃ³n actual
 			if cursor == len(message) {
 				message = append(message, ch)
 				if blocked == "" {
@@ -155,7 +155,7 @@ func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []st
 	}
 }
 
-// readEscapeSequence lee una secuencia de escape ANSI (después de ESC)
+// readEscapeSequence lee una secuencia de escape ANSI (despuÃ©s de ESC)
 func readEscapeSequence(conn net.Conn) (string, error) {
 	var buf [2]byte
 	n, err := conn.Read(buf[:1])
@@ -163,7 +163,7 @@ func readEscapeSequence(conn net.Conn) (string, error) {
 		return "", err
 	}
 	if buf[0] == '[' {
-		// Puede ser [A, [B, [C, [D] o secuencias más largas (para flechas basta)
+		// Puede ser [A, [B, [C, [D] o secuencias mÃ¡s largas (para flechas basta)
 		n, err = conn.Read(buf[:1])
 		if err != nil || n == 0 {
 			return "", err
