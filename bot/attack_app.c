@@ -16,6 +16,9 @@
 #include "rand.h"
 #include "table.h"
 #include "util.h"
+#include <string.h>
+#include <stdlib.h>
+
 
 void attack_app_proxy(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
 {

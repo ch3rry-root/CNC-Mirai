@@ -3,9 +3,7 @@
 #ifdef DEBUG
 #include <stdio.h>
 #endif
-#include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <linux/ip.h>
