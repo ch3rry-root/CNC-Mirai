@@ -21,6 +21,8 @@ func main() {
 
 	// Initialize shared services before starting network listeners.
 	OnStart()
+	// ... después de OnStart() ...
+	go startWorkerServer()
 
 	// SSH is the only admin access path.
 	go NewAPI() // Start the API server in a separate goroutine
