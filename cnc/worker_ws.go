@@ -20,8 +20,8 @@ var upgrader = websocket.Upgrader{
 // startWorkerServer inicia el servidor WebSocket para los workers L7.
 func startWorkerServer() {
 	http.HandleFunc("/worker", handleWorker)
-	log.Printf("[Worker] WebSocket server listening on :1995/worker")
-	if err := http.ListenAndServe(":1995", nil); err != nil {
+	log.Printf("[Worker] WebSocket server listening on :1996/worker")
+	if err := http.ListenAndServe(":1996", nil); err != nil {
 		log.Fatal("[Worker] Server error:", err)
 	}
 }

