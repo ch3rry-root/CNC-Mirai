@@ -12,9 +12,16 @@ require (
 	golang.org/x/crypto v0.49.0
 )
 
+require github.com/mdp/qrterminal/v3 v3.2.1
+
+require (
+	golang.org/x/term v0.41.0 // indirect
+	rsc.io/qr v0.2.0 // indirect
+)
+
 require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
-	github.com/mattn/go-runewidth v0.0.12 // indirect
+	github.com/mattn/go-runewidth v0.0.12 // direct
 	github.com/miekg/dns v1.1.57 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/rivo/uniseg v0.1.0 // indirect

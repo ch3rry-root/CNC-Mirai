@@ -3,8 +3,10 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/binary"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -13,12 +15,27 @@ import (
 // SSHConsole adapta un ssh.Channel para que implemente net.Conn
 type SSHConsole struct {
 	ssh.Channel
-	remoteAddr net.Addr
-	localAddr  net.Addr
+	remoteAddr     net.Addr
+	localAddr      net.Addr
+	terminalWidth  int32
+	terminalHeight int32
 }
 
 func (c *SSHConsole) RemoteAddr() net.Addr { return c.remoteAddr }
 func (c *SSHConsole) LocalAddr() net.Addr  { return c.localAddr }
+
+func (c *SSHConsole) TerminalWidth() int {
+	return int(atomic.LoadInt32(&c.terminalWidth))
+}
+
+func (c *SSHConsole) setTerminalSize(cols, rows int) {
+	if cols > 0 {
+		atomic.StoreInt32(&c.terminalWidth, int32(cols))
+	}
+	if rows > 0 {
+		atomic.StoreInt32(&c.terminalHeight, int32(rows))
+	}
+}
 
 // Stubs para los deadlines (no necesarios para nuestro uso, pero requeridos por net.Conn)
 func (c *SSHConsole) SetDeadline(t time.Time) error      { return nil }
@@ -79,7 +96,35 @@ func generateTempKey() (ssh.Signer, error) {
 	return signer, nil
 }
 
-// handleSSHConn maneja una conexión SSH entrante
+// parsePtyRequestSize decodifica columnas/filas del payload SSH pty-req.
+func parsePtyRequestSize(payload []byte) (cols int, rows int, ok bool) {
+	if len(payload) < 4 {
+		return 0, 0, false
+	}
+
+	termLen := int(binary.BigEndian.Uint32(payload[0:4]))
+	offset := 4 + termLen
+	if len(payload) < offset+16 {
+		return 0, 0, false
+	}
+
+	cols = int(binary.BigEndian.Uint32(payload[offset : offset+4]))
+	rows = int(binary.BigEndian.Uint32(payload[offset+4 : offset+8]))
+	return cols, rows, true
+}
+
+// parseWindowChangeSize decodifica columnas/filas del payload SSH window-change.
+func parseWindowChangeSize(payload []byte) (cols int, rows int, ok bool) {
+	if len(payload) < 8 {
+		return 0, 0, false
+	}
+
+	cols = int(binary.BigEndian.Uint32(payload[0:4]))
+	rows = int(binary.BigEndian.Uint32(payload[4:8]))
+	return cols, rows, true
+}
+
+// handleSSHConn maneja una conexion SSH entrante
 func handleSSHConn(conn net.Conn, config *ssh.ServerConfig) {
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config)
 	if err != nil {
@@ -93,39 +138,68 @@ func handleSSHConn(conn net.Conn, config *ssh.ServerConfig) {
 			newChannel.Reject(ssh.UnknownChannelType, "unsupported channel type")
 			continue
 		}
+
 		channel, requests, err := newChannel.Accept()
 		if err != nil {
 			continue
 		}
+
+		console := &SSHConsole{
+			Channel:    channel,
+			remoteAddr: conn.RemoteAddr(),
+			localAddr:  conn.LocalAddr(),
+		}
+
 		// Process session requests
-		go func() {
+		go func(console *SSHConsole, requests <-chan *ssh.Request) {
+			shellStarted := false
+
 			for req := range requests {
 				switch req.Type {
 				case "pty-req":
 					// Aceptar PTY para que el cliente SSH entre en modo interactivo
 					// y no duplique el eco local de la terminal.
-					req.Reply(true, nil)
-				case "window-change":
-					// Ignoramos el tamaÃ±o por ahora, pero confirmamos el request.
-					req.Reply(true, nil)
-				case "shell":
-					req.Reply(true, nil)
-					// Crear un wrapper que implemente net.Conn
-					console := &SSHConsole{
-						Channel:    channel,
-						remoteAddr: conn.RemoteAddr(),
-						localAddr:  conn.LocalAddr(),
+					if cols, rows, ok := parsePtyRequestSize(req.Payload); ok {
+						console.setTerminalSize(cols, rows)
 					}
-					// Llamar a la función Admin existente (que espera net.Conn)
-					AdminSSH(console)
-					return
+					if req.WantReply {
+						_ = req.Reply(true, nil)
+					}
+				case "window-change":
+					if cols, rows, ok := parseWindowChangeSize(req.Payload); ok {
+						console.setTerminalSize(cols, rows)
+					}
+					if req.WantReply {
+						_ = req.Reply(true, nil)
+					}
+				case "shell":
+					if shellStarted {
+						if req.WantReply {
+							_ = req.Reply(false, nil)
+						}
+						continue
+					}
+					shellStarted = true
+					if req.WantReply {
+						_ = req.Reply(true, nil)
+					}
+					// Run shell in its own goroutine so we keep handling
+					// asynchronous requests like window-change while the user types.
+					go func() {
+						AdminSSH(console)
+						_ = console.Close()
+					}()
 				case "exec":
 					// Si recibimos un comando directo, lo rechazamos (solo queremos shell)
-					req.Reply(false, nil)
+					if req.WantReply {
+						_ = req.Reply(false, nil)
+					}
 				default:
-					req.Reply(false, nil)
+					if req.WantReply {
+						_ = req.Reply(false, nil)
+					}
 				}
 			}
-		}()
+		}(console, requests)
 	}
 }

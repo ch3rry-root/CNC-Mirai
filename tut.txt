@@ -129,4 +129,11 @@ screen ./admin
 
 - Cambia el  bot port y cnc port en assets/server.toml
 
+L7
+ 
+Add browser folder to your vps 
+
+bash install.sh
+
+change ip and port in worker.js
 

@@ -1,0 +1,38 @@
+Así funciona hoy:
+
+Registro de temas
+En themes.go defines los temas disponibles en:
+adminThemeRenderers (nombre -> función que dibuja header)
+adminThemeOrder (orden en que salen en themes)
+Actualmente:
+default -> writeDefaultAdminHeader (gato, en cat.go)
+pink-cyan -> writePinkCyanAdminHeader (home.tfx, en admin.go)
+Render del header
+writeAdminHeader(conn, user) (en themes.go) toma user.Theme, valida y decide qué función usar.
+Si el tema no existe, cae a default.
+Comando themes
+En admin.go está:
+themes -> lista temas y marca (current)
+themes apply <tema> -> guarda en DB, limpia pantalla y aplica al instante.
+Persistencia por usuario
+En database.go:
+se agregó columna theme en users
+ensureUsersThemeColumn() migra DB vieja automáticamente al iniciar
+FindUser/CreateUser/GetUsers ya leen/escriben ese campo.
+Cómo agregar más temas:
+
+Crear función render del tema (nuevo archivo o en admin.go), por ejemplo:
+func writeMatrixAdminHeader(conn net.Conn, user *User) { ... }
+Registrarlo en themes.go:
+const matrixThemeName = "matrix"
+y en los mapas/listas:
+
+adminThemeRenderers[matrixThemeName] = writeMatrixAdminHeader
+adminThemeOrder = append(adminThemeOrder, matrixThemeName)
+Si es .tfx, crea cnc/banners/matrix.tfx y en tu función léelo como haces con pink-cyan.
+
+Reinicia el CNC y usa:
+
+themes
+themes apply matrix
+Si quieres, te agrego ahora mismo un tercer tema de ejemplo (matrix o blue-fire) para que te quede como plantilla escalable.

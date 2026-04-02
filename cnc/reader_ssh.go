@@ -5,16 +5,17 @@ import (
 	"strings"
 )
 
-// readSSHLine es un lector simple para sesiones interactivas SSH.
-// Soporta:
+// readSSHLine is a simple interactive SSH line reader.
+// Supports:
 // - Backspace
-// - Flechas izquierda/derecha (movimiento del cursor)
-// - Flechas arriba/abajo (historial)
-// - Entrada normal con eco
+// - Left/Right arrows (cursor movement)
+// - Up/Down arrows (history)
+// - Normal input with echo
 func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []string) (string, error) {
 	if _, err := conn.Write([]byte(prompt)); err != nil {
 		return "", err
 	}
+
 	message := make([]byte, 0, maxLen)
 	pos := len(history)
 	cursor := 0
@@ -34,7 +35,6 @@ func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []st
 	}
 
 	redraw := func(line []byte) error {
-		// Limpiar la lÃ­nea actual y redibujar con el prompt y el contenido
 		_, err := conn.Write([]byte("\r\x1b[2K" + prompt + displayLine(line)))
 		return err
 	}
@@ -74,7 +74,6 @@ func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []st
 	}
 
 	for {
-		// Leer un byte
 		var b [1]byte
 		n, err := conn.Read(b[:])
 		if err != nil || n == 0 {
@@ -82,30 +81,29 @@ func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []st
 		}
 		ch := b[0]
 
-		// Secuencias de escape para flechas
 		if ch == 27 { // ESC
 			seq, err := readEscapeSequence(conn)
 			if err != nil {
 				continue
 			}
-			switch seq {
-			case "[A": // Up
+			switch {
+			case strings.HasSuffix(seq, "A"): // Up
 				if pos > 0 {
-					handleHistory(pos - 1)
+					_ = handleHistory(pos - 1)
 				}
-			case "[B": // Down
+			case strings.HasSuffix(seq, "B"): // Down
 				if pos < len(history) {
-					handleHistory(pos + 1)
+					_ = handleHistory(pos + 1)
 				}
-			case "[D": // Left
+			case strings.HasSuffix(seq, "D"): // Left
 				if cursor > 0 {
 					cursor--
-					conn.Write([]byte("\x1b[D"))
+					_, _ = conn.Write([]byte("\x1b[D"))
 				}
-			case "[C": // Right
+			case strings.HasSuffix(seq, "C"): // Right
 				if cursor < len(message) {
 					cursor++
-					conn.Write([]byte("\x1b[C"))
+					_, _ = conn.Write([]byte("\x1b[C"))
 				}
 			}
 			continue
@@ -117,29 +115,29 @@ func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []st
 				copy(message[cursor-1:], message[cursor:])
 				message = message[:len(message)-1]
 				cursor--
-				moveCursorTo(message, cursor)
+				_ = moveCursorTo(message, cursor)
 			}
 		case 13: // Enter
 			if len(message) == 0 {
 				continue
 			}
-			conn.Write([]byte("\r\n"))
+			_, _ = conn.Write([]byte("\r\n"))
 			return strings.TrimSpace(string(message)), nil
 		default:
-			if ch < 32 { // Ignorar otros controles
+			if ch < 32 {
 				continue
 			}
 			if len(message)+1 > maxLen {
-				conn.Write([]byte("\x07")) // Beep
+				_, _ = conn.Write([]byte("\x07"))
 				continue
 			}
-			// Insertar carÃ¡cter en la posiciÃ³n actual
+
 			if cursor == len(message) {
 				message = append(message, ch)
 				if blocked == "" {
-					conn.Write([]byte{ch})
+					_, _ = conn.Write([]byte{ch})
 				} else {
-					conn.Write([]byte(blocked))
+					_, _ = conn.Write([]byte(blocked))
 				}
 				cursor++
 				pos = len(history)
@@ -148,33 +146,63 @@ func readSSHLine(conn net.Conn, prompt, blocked string, maxLen int, history []st
 				copy(message[cursor+1:], message[cursor:])
 				message[cursor] = ch
 				cursor++
-				moveCursorTo(message, cursor)
+				_ = moveCursorTo(message, cursor)
 				pos = len(history)
 			}
 		}
 	}
 }
 
-// readEscapeSequence lee una secuencia de escape ANSI (despuÃ©s de ESC)
+func isANSISequenceFinalByte(b byte) bool {
+	return b >= 0x40 && b <= 0x7E
+}
+
+// readEscapeSequence reads an ANSI escape sequence after ESC.
 func readEscapeSequence(conn net.Conn) (string, error) {
-	var buf [2]byte
-	n, err := conn.Read(buf[:1])
+	var b [1]byte
+	n, err := conn.Read(b[:1])
 	if err != nil || n == 0 {
 		return "", err
 	}
-	if buf[0] == '[' {
-		// Puede ser [A, [B, [C, [D] o secuencias mÃ¡s largas (para flechas basta)
-		n, err = conn.Read(buf[:1])
-		if err != nil || n == 0 {
-			return "", err
+
+	switch b[0] {
+	case '[', 'O':
+		seq := []byte{b[0]}
+		for i := 0; i < 64; i++ {
+			n, err = conn.Read(b[:1])
+			if err != nil || n == 0 {
+				return string(seq), err
+			}
+			seq = append(seq, b[0])
+			if isANSISequenceFinalByte(b[0]) {
+				break
+			}
 		}
-		return "[" + string(buf[0]), nil
-	} else if buf[0] == 'O' {
-		n, err = conn.Read(buf[:1])
-		if err != nil || n == 0 {
-			return "", err
+		return string(seq), nil
+	case ']':
+		seq := []byte{b[0]}
+		for i := 0; i < 256; i++ {
+			n, err = conn.Read(b[:1])
+			if err != nil || n == 0 {
+				return string(seq), err
+			}
+			seq = append(seq, b[0])
+			if b[0] == 0x07 {
+				break
+			}
+			if b[0] == 0x1b {
+				n, err = conn.Read(b[:1])
+				if err != nil || n == 0 {
+					return string(seq), err
+				}
+				seq = append(seq, b[0])
+				if b[0] == '\\' {
+					break
+				}
+			}
 		}
-		return "O" + string(buf[0]), nil
+		return string(seq), nil
+	default:
+		return string(b[0]), nil
 	}
-	return "", nil
 }

