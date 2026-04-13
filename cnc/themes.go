@@ -9,6 +9,22 @@ import (
 const (
 	defaultThemeName  = "default"
 	pinkCyanThemeName = "pink-cyan"
+
+	bannersRelativeDir      = "banners/"
+	bannersProjectFallback  = "cnc/banners/"
+	defaultThemeHomeBanner  = "home.tfx"
+	pinkCyanThemeHomeBanner = "home-pink-cyan.tfx"
+)
+
+var (
+	defaultThemeBannerPaths = []string{
+		bannersRelativeDir + defaultThemeHomeBanner,
+		bannersProjectFallback + defaultThemeHomeBanner,
+	}
+	pinkCyanThemeBannerPaths = []string{
+		bannersRelativeDir + pinkCyanThemeHomeBanner,
+		bannersProjectFallback + pinkCyanThemeHomeBanner,
+	}
 )
 
 type adminThemeRenderer func(conn net.Conn, user *User)

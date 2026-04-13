@@ -38,6 +38,14 @@ func defaultThemeGradientText(s string) string {
 }
 
 func writeDefaultAdminHeader(conn net.Conn, user *User) {
+	if writeThemeBannerRawFromPaths(conn, defaultThemeBannerPaths) {
+		return
+	}
+
+	writeDefaultAdminHeaderLegacy(conn, user)
+}
+
+func writeDefaultAdminHeaderLegacy(conn net.Conn, user *User) {
 	username := "user"
 	if user != nil && strings.TrimSpace(user.Username) != "" {
 		username = user.Username
