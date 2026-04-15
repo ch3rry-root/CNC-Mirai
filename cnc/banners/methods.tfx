@@ -1,0 +1,15 @@
+[38;5;196m Transport Layer [L4]
+[38;5;196m.[38;5;15msyn       [38;5;15m- TCP SYN flood (SOCK_RAW w/ TCP options: MSS, SACK, TS, WS, window scale)
+[38;5;196m.[38;5;15mack       [38;5;15m- TCP ACK flood (SOCK_RAW only, high‑rate ACK + random payload)
+[38;5;196m.[38;5;15msack      [38;5;15m- TCP SYN+SACK flood (SOCK_RAW only, SYN with SACK permitted option)
+[38;5;196m.[38;5;15msocket    [38;5;15m- TCP persistent socket flood (SOCK_STREAM only, full handshake, random data)
+[38;5;196m.[38;5;15mstomp     [38;5;15m- TCP STOMP bypass (SOCK_RAW + SOCK_STREAM handshake, valid seq numbers)
+[38;5;196m.[38;5;15mudpplain  [38;5;15m- UDP flood (SOCK_DGRAM, single‑thread, random payload, connect+send)
+[38;5;196m.[38;5;15mudpthread [38;5;15m- UDP flood (SOCK_DGRAM, multi‑thread, high PPS, configurable conns)
+[38;5;196m.[38;5;15mstdhex    [38;5;15m- UDP flood (SOCK_DGRAM, rotating hex payloads from pre‑defined table)
+[38;5;196m.[38;5;15mdiscord   [38;5;15m- UDP flood optimized for Discord
+[38;5;196m.[38;5;15mfivem     [38;5;15m- UDP flood optimized for FiveM 
+
+[38;5;196m Application Layer [L7]
+[38;5;196m.[38;5;15mhttp      [38;5;15m- HTTP/1.1 flood (SOCK_STREAM, GET/POST)
+[38;5;196m.[38;5;15mbrowser   [38;5;15m- Browser emulation – bypass CF Captcha & UAM (HTTP/2 flood)
