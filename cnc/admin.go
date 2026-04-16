@@ -407,11 +407,7 @@ func AdminSSH(conn net.Conn) {
 		case "?", "help", "h":
 			rows := [][]string{
 				{"clear", ansiCommands + "Clears your terminal" + ansiReset},
-				{"tcp_methods", ansiCommands + "View all TCP methods available" + ansiReset},
-				{"udp_methods", ansiCommands + "View all UDP methods available" + ansiReset},
-				{"l3_methods", ansiCommands + "View all Layer 3 methods available" + ansiReset},
-				{"l7_methods", ansiCommands + "View all Layer 7 methods available" + ansiReset},
-				{"game_methods", ansiCommands + "View all Game methods available" + ansiReset},
+				{"methods", ansiCommands + "List available attack methods" + ansiReset},
 				{"flags <.method>", ansiCommands + "View attack flags for a specific method" + ansiReset},
 				{"themes", ansiCommands + "List available console themes" + ansiReset},
 			}
