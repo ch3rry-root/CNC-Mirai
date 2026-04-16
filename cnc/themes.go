@@ -14,6 +14,8 @@ const (
 	bannersProjectFallback  = "cnc/banners/"
 	defaultThemeHomeBanner  = "home.tfx"
 	pinkCyanThemeHomeBanner = "home-pink-cyan.tfx"
+	defaultThemeMethodsTFX  = "methods.tfx"
+	pinkCyanMethodsTFX      = "methods-pink-cyan.tfx"
 )
 
 var (
@@ -24,6 +26,18 @@ var (
 	pinkCyanThemeBannerPaths = []string{
 		bannersRelativeDir + pinkCyanThemeHomeBanner,
 		bannersProjectFallback + pinkCyanThemeHomeBanner,
+	}
+	defaultThemeMethodsBannerPaths = []string{
+		bannersRelativeDir + defaultThemeMethodsTFX,
+		bannersProjectFallback + defaultThemeMethodsTFX,
+	}
+	pinkCyanMethodsBannerPaths = []string{
+		bannersRelativeDir + pinkCyanMethodsTFX,
+		bannersProjectFallback + pinkCyanMethodsTFX,
+	}
+	adminThemeMethodsBannerPaths = map[string][]string{
+		defaultThemeName:  defaultThemeMethodsBannerPaths,
+		pinkCyanThemeName: pinkCyanMethodsBannerPaths,
 	}
 )
 
@@ -99,4 +113,19 @@ func writeAdminHeader(conn net.Conn, user *User) {
 		renderer = adminThemeRenderers[defaultThemeName]
 	}
 	renderer(conn, user)
+}
+
+func writeThemeMethodsBanner(conn net.Conn, user *User) bool {
+	theme := defaultThemeName
+	if user != nil {
+		theme = resolveThemeName(user.Theme)
+		user.Theme = theme
+	}
+
+	paths, ok := adminThemeMethodsBannerPaths[theme]
+	if ok && writeThemeBannerRawFromPaths(conn, paths) {
+		return true
+	}
+
+	return writeThemeBannerRawFromPaths(conn, defaultThemeMethodsBannerPaths)
 }

@@ -557,6 +557,10 @@ func AdminSSH(conn net.Conn) {
 			continue
 
 		case "methods":
+			if !writeThemeMethodsBanner(session.Conn, session.User) {
+				session.Conn.Write([]byte(ansiWarning + "No methods banner found for the current theme." + ansiReset + "\r\n"))
+			}
+			continue
 
 			// Flags command
 			//==============================================================================================================================================================================================================================================================================================================================//

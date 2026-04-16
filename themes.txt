@@ -36,3 +36,73 @@ Reinicia el CNC y usa:
 themes
 themes apply matrix
 Si quieres, te agrego ahora mismo un tercer tema de ejemplo (matrix o blue-fire) para que te quede como plantilla escalable.
+
+
+
+
+// agregar banners por comando (home, methods, help, etc.)
+
+
+La forma más escalable es usar un registro único de banners por `tema + comando`, con una bandera de render (`centrado` o `raw`), y un solo helper para imprimirlos desde `admin.go`.
+
+Base que ya tienes:
+1. Render centrado: [pink-cyan-theme.go:185](c:/Users/guira/Desktop/CNC%20Mirai/cnc/pink-cyan-theme.go:185)
+2. Render sin centrar (raw): [pink-cyan-theme.go:200](c:/Users/guira/Desktop/CNC%20Mirai/cnc/pink-cyan-theme.go:200)
+3. Resolución de tema actual: [themes.go:88](c:/Users/guira/Desktop/CNC%20Mirai/cnc/themes.go:88)
+4. Ejemplo actual por comando (`methods`): [themes.go:118](c:/Users/guira/Desktop/CNC%20Mirai/cnc/themes.go:118), [admin.go:559](c:/Users/guira/Desktop/CNC%20Mirai/cnc/admin.go:559)
+
+Patrón recomendado (conceptual):
+```go
+type bannerMode int
+const (
+    BannerRaw bannerMode = iota
+    BannerCentered
+)
+
+type bannerSpec struct {
+    Mode  bannerMode
+    Paths []string
+}
+
+var themeCommandBanners = map[string]map[string]bannerSpec{
+    "default": {
+        "home":    {Mode: BannerRaw, Paths: []string{"banners/home.tfx", "cnc/banners/home.tfx"}},
+        "methods": {Mode: BannerRaw, Paths: []string{"banners/methods.tfx", "cnc/banners/methods.tfx"}},
+        "help":    {Mode: BannerRaw, Paths: []string{"banners/help.tfx", "cnc/banners/help.tfx"}},
+    },
+    "pink-cyan": {
+        "home":    {Mode: BannerCentered, Paths: []string{"banners/home-pink-cyan.tfx", "cnc/banners/home-pink-cyan.tfx"}},
+        "methods": {Mode: BannerRaw, Paths: []string{"banners/methods-pink-cyan.tfx", "cnc/banners/methods-pink-cyan.tfx"}},
+        "help":    {Mode: BannerRaw, Paths: []string{"banners/help-pink-cyan.tfx", "cnc/banners/help-pink-cyan.tfx"}},
+    },
+}
+```
+
+Helper único:
+```go
+func writeCommandBanner(conn net.Conn, user *User, key string) bool {
+    theme := resolveThemeName(user.Theme)
+
+    spec, ok := themeCommandBanners[theme][key]
+    if !ok {
+        spec, ok = themeCommandBanners[defaultThemeName][key]
+        if !ok { return false }
+    }
+
+    if spec.Mode == BannerCentered {
+        return writeThemeBannerFromPaths(conn, currentTerminalWidth(conn), spec.Paths)
+    }
+    return writeThemeBannerRawFromPaths(conn, spec.Paths)
+}
+```
+
+Cómo agregar `help.tfx` / `help-pink-cyan.tfx`:
+1. Crear archivos: `cnc/banners/help.tfx` y `cnc/banners/help-pink-cyan.tfx`.
+2. Registrar ambos en el mapa `themeCommandBanners` con modo `BannerRaw` o `BannerCentered`.
+3. En `admin.go`, en `case "help"` (o `?`), llamar:
+```go
+if writeCommandBanner(session.Conn, session.User, "help") { continue }
+```
+4. Dejar debajo el fallback actual (tabla/texto) por si falta el archivo.
+
+Con eso, cada nuevo comando-banner queda en 2 pasos: crear `.tfx` + registrar en mapa, y en el `case` es una sola línea.
