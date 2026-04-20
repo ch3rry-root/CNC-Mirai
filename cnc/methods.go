@@ -220,7 +220,7 @@ var Methods map[string]*Method = map[string]*Method{
 	},
 	".fivem": {
 		Type:        10,
-		Flags:       []uint8{0, 1, 7, 8, 30},
+		Flags:       []uint8{0, 1, 7, 8, 29},
 		Description: "",
 	},
 
