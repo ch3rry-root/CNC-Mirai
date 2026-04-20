@@ -16,6 +16,8 @@ const (
 	pinkCyanThemeHomeBanner = "home-pink-cyan.tfx"
 	defaultThemeMethodsTFX  = "methods.tfx"
 	pinkCyanMethodsTFX      = "methods-pink-cyan.tfx"
+	defaultThemeHelpTFX     = "help.tfx"
+	defaultLoginBanner      = "login.tfx"
 )
 
 var (
@@ -128,4 +130,26 @@ func writeThemeMethodsBanner(conn net.Conn, user *User) bool {
 	}
 
 	return writeThemeBannerRawFromPaths(conn, defaultThemeMethodsBannerPaths)
+}
+
+func writeHelpBanner(conn net.Conn, user *User) bool {
+	theme := defaultThemeName
+	if user != nil {
+		theme = resolveThemeName(user.Theme)
+		user.Theme = theme
+	}
+
+	paths := []string{
+		bannersRelativeDir + defaultThemeHelpTFX,
+		bannersProjectFallback + defaultThemeHelpTFX,
+	}
+	return writeThemeBannerRawFromPaths(conn, paths)
+}
+
+func writeLoginBanner(conn net.Conn) bool {
+	paths := []string{
+		bannersRelativeDir + defaultLoginBanner,
+		bannersProjectFallback + defaultLoginBanner,
+	}
+	return writeThemeBannerRawFromPaths(conn, paths)
 }

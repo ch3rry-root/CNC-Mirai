@@ -114,14 +114,14 @@ func setupUserMFA(conn net.Conn, user *User) error {
 		return err
 	}
 
-	conn.Write([]byte("\r\n" + ansiPrompt + "MFA setup required for your account." + ansiReset + "\r\n"))
+	conn.Write([]byte("\r\n" + ansiCommands + "MFA setup required for your account." + ansiReset + "\r\n"))
 	conn.Write([]byte(ansiSeparator + "Open your Authenticator app and choose manual key setup (TOTP)." + ansiReset + "\r\n"))
 	conn.Write([]byte(ansiSeparator + "Issuer" + ansiReset + ": " + ansiCommands + mfaIssuer + ansiReset + "\r\n"))
 	conn.Write([]byte(ansiSeparator + "Account" + ansiReset + ": " + ansiCommands + user.Username + ansiReset + "\r\n"))
 	conn.Write([]byte(ansiSeparator + "Manual key" + ansiReset + ": " + ansiNumbers + formatMFASecretForDisplay(secret) + ansiReset + "\r\n"))
 	conn.Write([]byte(ansiSeparator + "Enter the current 6-digit code to finish setup." + ansiReset + "\r\n\r\n"))
 
-	prompt := fmt.Sprintf("%sMFA code%s %s->%s %s", ansiPrompt, ansiReset, ansiSuccess, ansiReset, ansiCommands)
+	prompt := fmt.Sprintf("%sMFA code%s %s->%s %s", ansiCommands, ansiReset, ansiPrompt, ansiReset, ansiCommands)
 	for attempt := 1; attempt <= mfaMaxAttemptRounds; attempt++ {
 		code, err := requestMFACode(conn, prompt)
 		if err != nil {
