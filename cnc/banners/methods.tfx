@@ -4,6 +4,7 @@
 [38;5;196m.[97msack      [97m- TCP SYN+SACK flood (SOCK_RAW only, SYN with SACK permitted option)
 [38;5;196m.[97msocket    [97m- TCP persistent socket flood (SOCK_STREAM only, full handshake, random data)
 [38;5;196m.[97mstomp     [97m- TCP STOMP bypass (SOCK_RAW + SOCK_STREAM handshake, valid seq numbers)
+[38;5;196m.[97mtcpbypass [97m- TCP bypass(SOCK_STREAM, random length random data)
 [38;5;196m.[97mudpplain  [97m- UDP flood (SOCK_DGRAM, single‑thread, random payload, connect+send)
 [38;5;196m.[97mudpthread [97m- UDP flood (SOCK_DGRAM, multi‑thread, high PPS, configurable conns)
 [38;5;196m.[97mstdhex    [97m- UDP flood (SOCK_DGRAM, rotating hex payloads from pre‑defined table)
