@@ -169,17 +169,6 @@ var Methods map[string]*Method = map[string]*Method{
 		Description: "",
 	},
 
-	//	".ppsflood": {
-	//		Type:        2,
-	//		Flags:       []uint8{0, 6, 7},
-	//		Description: "nudp",
-	//	},
-
-	//		Type:        3,
-	//		Flags:       []uint8{2, 3, 4, 5, 6, 7},
-	//		Description: "",
-	//	},
-
 	".greip": {
 		Type:        4,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 19, 25},
@@ -216,18 +205,6 @@ var Methods map[string]*Method = map[string]*Method{
 		Description: "",
 	},
 
-	//	".tcpwra": {
-	//		Type:        10,
-	//		Flags:       []uint8{0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
-	//		Description: "",
-	//	},
-
-	//	".ovh": {
-	//		Type:        11,
-	//		Flags:       []uint8{2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25},
-	//		Description: "",
-	//	},
-
 	".stomp": {
 		Type:        12,
 		Flags:       []uint8{0, 1, 2, 3, 4, 5, 7, 11, 12, 13, 14, 15, 16},
@@ -257,12 +234,6 @@ var Methods map[string]*Method = map[string]*Method{
 		Flags:       []uint8{0, 1, 7},
 		Description: "",
 	},
-
-	//	".game": {
-	//		Type:        17,
-	//		Flags:       []uint8{8, 7, 20, 21, 22, 24},
-	//		Description: "",
-	//	},
 
 	".discord": {
 		Type:        18,

