@@ -20,11 +20,11 @@
 #include <string.h>   // para memcpy
 
 // Headers del proyecto (con ruta relativa)
-#include "../attack.h"
-#include "../includes.h"
-#include "../checksum.h"
-#include "../rand.h"
-#include "../util.h"
+#include "attack.h"
+#include "includes.h"
+#include "checksum.h"
+#include "rand.h"
+#include "util.h"
 
 #define MAX_EPOLL_EVENTS 512
 #define MAX_HTTP_SOCKETS 2000

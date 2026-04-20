@@ -25,13 +25,13 @@
 
 // Local header files
 
-#include "../includes.h"
-#include "../attack.h"
-#include "../checksum.h"
-#include "../rand.h"
-#include "../util.h"
-#include "../table.h"
-#include "../protocol.h"
+#include "includes.h"
+#include "attack.h"
+#include "checksum.h"
+#include "rand.h"
+#include "util.h"
+#include "table.h"
+#include "protocol.h"
 
 #define MAX_THREADS 100
 
