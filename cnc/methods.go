@@ -200,17 +200,17 @@ var Methods map[string]*Method = map[string]*Method{
 	// UDP methods
 	".udpthread": {
 		Type:        6,
-		Flags:       []uint8{0, 1, 7},
+		Flags:       []uint8{0, 1, 6, 7, 24},
 		Description: "",
 	},
 	".stdhex": {
 		Type:        7,
-		Flags:       []uint8{0, 1, 7},
+		Flags:       []uint8{0, 1, 6, 7, 24},
 		Description: "",
 	},
 	".udpplain": {
 		Type:        8,
-		Flags:       []uint8{0, 1, 7},
+		Flags:       []uint8{0, 1, 6, 7, 24},
 		Description: "",
 	},
 	".discord": {
