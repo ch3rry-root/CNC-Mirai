@@ -14,11 +14,11 @@
 #include <stdlib.h>
 
 // local includes
-#include "../includes.h"
-#include "../attack.h"
-#include "../rand.h"
-#include "../table.h"
-#include "../util.h"
+#include "includes.h"
+#include "attack.h"
+#include "rand.h"
+#include "table.h"
+#include "util.h"
 
 void attack_app_http(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
 {

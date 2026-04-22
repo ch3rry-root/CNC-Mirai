@@ -8,7 +8,7 @@ void util_strcat(char *, char *);
 void util_memcpy(void *, void *, int);
 void util_zero(void *, int);
 
-int util_strlen(char *);
+int util_strlen(const char *str);
 int util_strcpy(char *, char *);
 int util_atoi(char *, int);
 int util_memsearch(char *, int, char *, int);
