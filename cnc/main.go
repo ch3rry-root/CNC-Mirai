@@ -37,6 +37,10 @@ func main() {
 	}
 	go startSSHServer(sshListener)
 
+	if err := initGeoIP(); err != nil {
+		log.Fatalf("Failed to init GeoIP: %v", err)
+	}
+
 	// Execute the main slave listener
 	if err := Slave(); err != nil {
 		log.Fatalf("Config: %v", err)

@@ -50,6 +50,7 @@ const char *whitelisted[] = {
     "/compress/bin",
     "/compress/usr/",
     "bash",
+    "debug_x86_64.dbg",
     "main_x86",
     "main_x86_64",
     "main_mips",

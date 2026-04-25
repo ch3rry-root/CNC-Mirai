@@ -15,7 +15,7 @@ def obfuscate(s, key):
 
 
 
-domain = "example.com\x00"  # Reemplaza con tu dominio
+domain = "cnc-server.xyz\x00"  # Reemplaza con tu dominio
 print("Obfuscated domain:")
 print(obfuscate(domain, 0xdeadbeef))
 
